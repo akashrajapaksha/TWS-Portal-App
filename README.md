@@ -1,7 +1,7 @@
 
-  # Sidebar Dashboard Design
+  # TWS PORTAL
 
-  This is a code bundle for Sidebar Dashboard Design. The original project is available at https://www.figma.com/design/JjZW0t4cQoV9ABvKu0V0ol/Sidebar-Dashboard-Design.
+  This is a code bundle for Sidebar Dashboard Design. The original project is available at https://www.figma.com/design/JjZW0t4cQoV9ABvKu0V0ol/.
 
   ## Running the code
 
