@@ -1,0 +1,25 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+/* Add this to your global CSS file */
+@keyframes fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.animate-fall {
+  animation: fall linear infinite !important;
+  display: block !important;
+}
