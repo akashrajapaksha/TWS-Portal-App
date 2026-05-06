@@ -101,6 +101,8 @@ export function Sidebar({
       visible: true, 
       subItems: [
         { id: 'leaves', label: 'Leaves', visible: true },
+        // ✅ NEW: Attendance Records Sub-menu
+        { id: 'attendance-records', label: 'Attendance', visible: true },
       ]
     },
     { id: 'feedback', icon: MessageSquarePlus, label: 'Feedback Form', visible: canSeeFeedback },
@@ -115,7 +117,6 @@ export function Sidebar({
         { id: 'other-logs', label: 'Other Logs', visible: true },
       ]
     },
-    // ✅ ADDED: Analyzing Menu Item
     { 
       id: 'analyzing', 
       icon: BarChart3, 

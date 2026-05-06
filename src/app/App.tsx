@@ -19,6 +19,7 @@ import { WarningLetters } from './components/WarningLetters';
 import { FeedbackForm } from './components/FeedbackForm';
 import { Analyzing } from './components/Analyzing';
 import { Loader2 } from 'lucide-react';
+import { AttendanceRecords } from './components/AttendanceRecords';
 
 // --- FESTIVAL ANIMATION COMPONENT ---
 const NewYearAnimation = () => {
@@ -158,6 +159,7 @@ export default function App() {
 
   const renderContent = () => {
     const role = userData?.role || 'Employees';
+    // ✅ Added attendance-records to potential pages
     const isLogPage = ['login-logs', 'leave-logs', 'other-logs', 'analyzing'].includes(activeMenuItem);
     const hasLogAccess = ['Super Admin', 'ER'].includes(role);
 
@@ -177,6 +179,16 @@ export default function App() {
       case 'ir': return <IncidentReports />;
       case 'warning-letter': return <WarningLetters />;
       case 'leaves': return <Leaves />;
+      
+      // ✅ NEW: Attendance Records route
+      case 'attendance-records': 
+        return (
+          <AttendanceRecords 
+            userRole={role} 
+            employeeId={userData?.employee_id} 
+          />
+        );
+
       case 'login-logs': return <LoginLogs />;
       case 'leave-logs': return <LeaveLogs />;
       case 'other-logs': return <OtherLogs />;
