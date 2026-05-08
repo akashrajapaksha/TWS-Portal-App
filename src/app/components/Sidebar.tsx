@@ -11,7 +11,7 @@ import {
   FileText,
   MessageSquarePlus,
   AlertCircle,
-  BarChart3 // Added for Analyzing icon
+  BarChart3 
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -64,7 +64,7 @@ export function Sidebar({
 
   const canSeeOrganization = isAuthority && !isSupervisor && !isLD;
   const canAccessLogs = isSuperAdmin;
-  const canSeeAnalyzing = isSuperAdmin; // Control visibility for Analyzing
+  const canSeeAnalyzing = isSuperAdmin; 
   const canSeeFeedback = true;
 
   const menuItems: MenuItem[] = [
@@ -101,8 +101,9 @@ export function Sidebar({
       visible: true, 
       subItems: [
         { id: 'leaves', label: 'Leaves', visible: true },
-        // ✅ NEW: Attendance Records Sub-menu
         { id: 'attendance-records', label: 'Attendance', visible: true },
+        // --- NEW SUB MENU ITEM ADDED HERE ---
+        { id: 'attendance-reports', label: 'Reports', visible: isAuthority }, 
       ]
     },
     { id: 'feedback', icon: MessageSquarePlus, label: 'Feedback Form', visible: canSeeFeedback },
@@ -145,7 +146,6 @@ export function Sidebar({
     <>
       <aside className={`w-[280px] bg-white border-r border-gray-200 flex flex-col h-screen transition-all duration-300 ${isCollapsed ? 'hidden' : 'block'}`}>
         
-        {/* User Profile Section */}
         <div className="p-6">
           <div className="bg-gray-100 rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-200/50">
             <div className="w-12 h-12 bg-indigo-600 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow-inner italic">
@@ -162,7 +162,6 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Navigation Section */}
         <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => {
             if (!item.visible) return null;
@@ -217,7 +216,6 @@ export function Sidebar({
           })}
         </nav>
 
-        {/* Logout Section */}
         <div className="p-4 border-t border-gray-100">
           <button
             onClick={() => setShowLogoutConfirm(true)}
@@ -229,7 +227,6 @@ export function Sidebar({
         </div>
       </aside>
 
-      {/* CUSTOM LOGOUT MODAL */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-6">
           <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl text-center border border-slate-100 animate-in zoom-in-95">

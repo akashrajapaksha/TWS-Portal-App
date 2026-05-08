@@ -20,17 +20,17 @@ import { FeedbackForm } from './components/FeedbackForm';
 import { Analyzing } from './components/Analyzing';
 import { Loader2 } from 'lucide-react';
 import { AttendanceRecords } from './components/AttendanceRecords';
+import { AttendanceReports } from './components/AttendanceReports';
 
 // --- FESTIVAL ANIMATION COMPONENT ---
 const NewYearAnimation = () => {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    // Only show around April 11th - April 16th, 2026
     const now = new Date();
-    const isMarch = now.getMonth() === 2; // 0-indexed, 3 is April
-    const isToday = now.getDate() >= 17 && now.getDate() <= 16;
-    if (isMarch && isToday) setShow(true);
+    const isApril = now.getMonth() === 3; // 0-indexed: 3 is April
+    const isActiveRange = now.getDate() >= 11 && now.getDate() <= 16;
+    if (isApril && isActiveRange) setShow(true);
   }, []);
 
   if (!show) return null;
@@ -93,7 +93,6 @@ export default function App() {
 
   const [isAuthenticated, setIsAuthenticated] = useState(!!userData);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth < 768);
-  const [isLoading, setIsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -159,7 +158,6 @@ export default function App() {
 
   const renderContent = () => {
     const role = userData?.role || 'Employees';
-    // ✅ Added attendance-records to potential pages
     const isLogPage = ['login-logs', 'leave-logs', 'other-logs', 'analyzing'].includes(activeMenuItem);
     const hasLogAccess = ['Super Admin', 'ER'].includes(role);
 
@@ -175,12 +173,11 @@ export default function App() {
       case 'add-order': return <AddOrder />;
       case 'add-mistakes': return <AddMistakes />;
       case 'bonus-calculation': return <BonusCalculation />; 
-      case 'reports': return <Reports />;
+      case 'reports': return <Reports />; // Performance Reports
       case 'ir': return <IncidentReports />;
       case 'warning-letter': return <WarningLetters />;
       case 'leaves': return <Leaves />;
       
-      // ✅ NEW: Attendance Records route
       case 'attendance-records': 
         return (
           <AttendanceRecords 
@@ -188,6 +185,10 @@ export default function App() {
             employeeId={userData?.employee_id} 
           />
         );
+
+      // ✅ Map to your brand new Attendance Reports page
+      case 'attendance-reports': 
+        return <AttendanceReports />;
 
       case 'login-logs': return <LoginLogs />;
       case 'leave-logs': return <LeaveLogs />;
@@ -209,7 +210,6 @@ export default function App() {
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-gray-50 font-sans antialiased overflow-hidden">
       
-      {/* 1. Festive Animation Overlay */}
       <NewYearAnimation />
 
       {isLoggingOut && (
