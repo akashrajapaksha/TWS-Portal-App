@@ -19,7 +19,7 @@ export function LeaveLogs() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // LocalStorage එකෙන් User විස්තර ලබා ගැනීම (Role එක පරීක්ෂා කිරීමට)
+  // Retrieve user credentials from LocalStorage to authorize administrative roles
   const storedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
 
   useEffect(() => {
@@ -49,10 +49,10 @@ export function LeaveLogs() {
     }
   }, [storedUser.role]);
 
-  // Search Logic (නම හෝ ID එක අනුව සෙවීම)
+  // Client-side filtering logic matching input against Name or institutional Badge ID
   const filteredLogs = logs.filter(log => 
-    log.employee_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.employee_id.toLowerCase().includes(searchTerm.toLowerCase())
+    (log.employee_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (log.employee_id || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusStyle = (status: string) => {
@@ -61,6 +61,13 @@ export function LeaveLogs() {
       case 'Rejected': return 'bg-red-100 text-red-700 border-red-200';
       default: return 'bg-amber-100 text-amber-700 border-amber-200';
     }
+  };
+
+  // Safe formatting helper to guard against unparsed or empty database date strings
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const parsed = new Date(dateString);
+    return isNaN(parsed.getTime()) ? dateString : parsed.toLocaleDateString();
   };
 
   if (loading) return (
@@ -148,11 +155,11 @@ export function LeaveLogs() {
                         {log.number_of_days} DAYS
                       </div>
                       <div className="text-[10px] font-bold text-gray-400 uppercase">
-                        {log.start_date} - {log.end_date}
+                        {formatDate(log.start_date)} - {formatDate(log.end_date)}
                       </div>
                     </td>
                     <td className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                      {new Date(log.apply_date).toLocaleDateString()}
+                      {formatDate(log.apply_date)}
                     </td>
                     <td className="px-8 py-6 text-center">
                       <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${getStatusStyle(log.status)}`}>

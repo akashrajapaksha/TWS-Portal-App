@@ -3,7 +3,7 @@ import { Search, Clock } from 'lucide-react';
 
 interface AttendanceRecord {
   id: number;
-  date: string;
+  date: string; 
   employee_id?: string;
   employee_name?: string;
   shift_name: string; 
@@ -22,23 +22,54 @@ export function AttendanceRecords({ userRole, employeeId }: AttendanceProps) {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(''); 
   
-  // Normalized role check
   const isSuperAdmin = userRole.toUpperCase() === 'SUPER ADMIN';
 
-  /**
-   * Helper to map database shift codes to readable names
-   */
   const getShiftLabel = (code: string | null | undefined) => {
     if (!code || code === 'N/A') return 'N/A';
-    
     const mapping: Record<string, string> = {
       'A': 'Morning',
       'B': 'Afternoon',
       'C': 'Night',
       'RD': 'Off Day'
     };
-
     return mapping[code.toUpperCase()] || code;
+  };
+
+  const getStatusStyles = (status: string) => {
+    const s = status.toUpperCase();
+    if (s === 'COMPLETED') return 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+    if (s === 'LEAVE') return 'bg-orange-100 text-orange-700 border border-orange-200'; 
+    if (s === 'OFF DAY') return 'bg-slate-100 text-slate-500';
+    if (s === 'ABSENT') return 'bg-red-50 text-red-600 border border-red-100';
+    if (s === 'N/A') return 'bg-gray-50 text-gray-400';
+    return 'bg-blue-50 text-blue-600 border border-blue-100'; 
+  };
+
+  /**
+   * Helper function to detect and normalize dates.
+   * If the string looks like an ISO timestamp (contains "T" or "-"), it converts it locally.
+   * Otherwise, it keeps the clean string returned by the Super Admin endpoint.
+   */
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    
+    // Check if it's a raw ISO string layout (e.g., "2026-05-30T18:30:00.000Z")
+    if (dateStr.includes('T') || dateStr.includes('-')) {
+      const dateObj = new Date(dateStr);
+      
+      // If parsing fails for any reason, fall back safely
+      if (isNaN(dateObj.getTime())) return dateStr;
+
+      // Format safely to match Super Admin layout exactly: e.g., "28 MAY 2026"
+      return dateObj.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }).toUpperCase();
+    }
+
+    // Return as-is if already formatted cleanly by the server
+    return dateStr;
   };
 
   useEffect(() => {
@@ -129,7 +160,8 @@ export function AttendanceRecords({ userRole, employeeId }: AttendanceProps) {
                 filteredRecords.map((record, index) => (
                   <tr key={record.id || index} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4 text-[11px] font-black text-slate-900 uppercase">
-                      {record.date ? new Date(record.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '---'}
+                      {/* FIXED: Uses the dynamic filter processing engine to ensure consistent layouts across views */}
+                      {formatDisplayDate(record.date)}
                     </td>
                     
                     {isSuperAdmin && (
@@ -151,18 +183,14 @@ export function AttendanceRecords({ userRole, employeeId }: AttendanceProps) {
                       </span>
                     </td>
 
-                    <td className="px-6 py-4 text-[11px] font-bold text-slate-600">
+                    <td className={`px-6 py-4 text-[11px] font-bold ${record.status === 'Leave' ? 'text-slate-300' : 'text-slate-600'}`}>
                       {record.check_in_time || '--:--'}
                     </td>
-                    <td className="px-6 py-4 text-[11px] font-bold text-slate-600">
+                    <td className={`px-6 py-4 text-[11px] font-bold ${record.status === 'Leave' ? 'text-slate-300' : 'text-slate-600'}`}>
                       {record.check_out_time || '--:--'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                        record.status === 'On Time' ? 'bg-emerald-50 text-emerald-600' :
-                        record.status.includes('Late') ? 'bg-amber-50 text-amber-600' :
-                        'bg-blue-50 text-blue-600'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${getStatusStyles(record.status)}`}>
                         {record.status}
                       </span>
                     </td>

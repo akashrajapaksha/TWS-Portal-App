@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  Users, Package, TriangleAlert, RefreshCcw, 
-  Search, Activity, Calendar, Target, Zap
+  Package, TriangleAlert, Activity, Calendar, Zap, Crown, Clock
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -16,17 +15,25 @@ interface LeaveRecord {
   project: string;
 }
 
+interface TopPerformer {
+  name: string;
+  project: string;
+  profilePhoto: string;
+  ordersCount: number;
+  date: string;
+  shift: string;
+  isHistorical: boolean;
+}
+
 interface DashboardContentProps {
   employeeName?: string;
   employeeId?: string; 
-  employeeInitials?: string;
   userRole?: string; 
 }
 
 export function DashboardContent({ 
   employeeName: authName = "User", 
   employeeId: authId = "",
-  employeeInitials: authInitials = "??",
   userRole = 'Employees' 
 }: DashboardContentProps) {
   
@@ -34,23 +41,31 @@ export function DashboardContent({
     totalOrders: 0,
     totalMistakes: 0,
     totalMyrLoss: 0,
-    overallPerformance: 0,
-    upcomingLeaves: [] as LeaveRecord[]
+    upcomingLeaves: [] as LeaveRecord[],
+    currentShift: 'MORNING',
+    topPerformer: null as TopPerformer | null
   });
   
-  const [totalEmployees, setTotalEmployees] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const [lankaTimeStr, setLankaTimeStr] = useState('');
 
-  const [targetEmployee, setTargetEmployee] = useState({
-    name: authName,
-    id: authId,
-    initials: authInitials,
-    isSelf: true
-  });
+  // Real-time clock synchronization engine formatted to Asia/Colombo
+  useEffect(() => {
+    const updateClock = () => {
+      const options = {
+        timeZone: 'Asia/Colombo',
+        hour: '2-digit' as const,
+        minute: '2-digit' as const,
+        second: '2-digit' as const,
+        hour12: true
+      };
+      setLankaTimeStr(new Date().toLocaleTimeString('en-US', options));
+    };
 
-  const isAuthority = ['SUPER ADMIN', 'ADMIN', 'ER', 'TPS', 'TL', 'SUPERVISORS', 'TSP', 'LD'].includes(userRole.toUpperCase().trim());
+    updateClock();
+    const intervalId = setInterval(updateClock, 1000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   const fetchDashboardData = useCallback(async (empId: string) => {
     if (!empId) return;
@@ -58,7 +73,7 @@ export function DashboardContent({
     try {
       const role = userRole.toUpperCase().trim();
       const response = await axios.get(`${API_BASE_URL}/dashboard/stats`, {
-        params: { employeeId: empId, userRole: role },
+        params: { employeeId: String(empId).trim(), userRole: role },
         withCredentials: true 
       });
       
@@ -67,13 +82,10 @@ export function DashboardContent({
         totalOrders: Number(data.totalOrders) || 0,
         totalMistakes: Number(data.totalMistakes) || 0,
         totalMyrLoss: Number(data.totalMyrLoss) || 0,
-        overallPerformance: Number(data.overallPerformance) || 0,
-        upcomingLeaves: data.upcomingLeaves || []
+        upcomingLeaves: data.upcomingLeaves || [],
+        currentShift: data.currentShift || 'MORNING',
+        topPerformer: data.topPerformer || null
       });
-      
-      if (data.totalEmployees !== undefined) {
-        setTotalEmployees(Number(data.totalEmployees));
-      }
     } catch (err) {
       console.error("Fetch Error:", err);
     } finally {
@@ -82,61 +94,52 @@ export function DashboardContent({
   }, [userRole]);
 
   useEffect(() => {
-    if (targetEmployee.id) fetchDashboardData(targetEmployee.id);
-  }, [targetEmployee.id, fetchDashboardData]);
+    if (authId) fetchDashboardData(authId);
+  }, [authId, fetchDashboardData]);
 
-  const handleSearch = async () => {
-    if (!isAuthority || !searchQuery.trim()) return;
-    setIsSearching(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/dashboard/search/${searchQuery.trim().toUpperCase()}`, {
-        withCredentials: true
-      });
-      
-      if (response.data) {
-        const data = response.data;
-        setTargetEmployee({
-          name: data.name,
-          id: data.id,
-          initials: data.initials || '??',
-          isSelf: data.id === authId
-        });
-      }
-    } catch (err: any) {
-      alert(err.response?.status === 404 ? "Employee Not Found" : "Search Failed");
-    } finally {
-      setIsSearching(false);
-      setSearchQuery('');
+  // Helper utility variant selector for shifting badge UI colors dynamically
+  const getShiftBadgeStyles = (shift: string) => {
+    const cleanShift = shift.toUpperCase().trim();
+    if (cleanShift === 'AFTERNOON') {
+      return 'bg-amber-50 text-amber-700 border-amber-200';
     }
+    if (cleanShift === 'NIGHT') {
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    }
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200'; // Fallback / Morning Shift
   };
 
   return (
     <div className="flex-1 bg-[#F9FBFF] min-h-screen font-sans pb-10">
       
-      {/* --- 1. NAVIGATION (Removed TWS & Personal Intelligence) --- */}
+      {/* --- 1. NAVIGATION (CLOCK AND DYNAMIC SHIFT CONTEXT) --- */}
       <nav className="bg-white border-b border-slate-100 px-8 py-3 flex items-center justify-between sticky top-0 z-40">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl shadow-sm">
+            <Clock size={13} className="text-blue-400 animate-pulse" />
+            <span className="text-[11px] font-black tracking-tight tabular-nums w-[75px]">
+              {lankaTimeStr || '00:00:00 AM'}
+            </span>
+            <span className="text-[8px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded ml-1 uppercase">SL</span>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 border-l border-slate-200 pl-6">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Current Shift:</span>
+            <span className={`text-[10px] font-black border px-2.5 py-1 rounded-lg uppercase tracking-tight transition-colors duration-350 ${getShiftBadgeStyles(stats.currentShift)}`}>
+              {stats.currentShift} Shift
+            </span>
+          </div>
+        </div>
+        
         <div className="flex items-center gap-3">
           <Zap size={14} className="text-blue-600 fill-blue-600" />
           <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">System Dashboard</span>
-        </div>
-        <div className="flex items-center gap-4">
-          {isAuthority && !targetEmployee.isSelf && (
-            <button 
-              onClick={() => setTargetEmployee({ name: authName, id: authId, initials: authInitials, isSelf: true })}
-              className="text-[9px] font-black text-blue-600 uppercase border border-blue-100 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all"
-            >
-              <RefreshCcw size={10} className={`inline mr-1 ${loading ? 'animate-spin' : ''}`} /> Reset View
-            </button>
-          )}
-          <div className="h-8 w-8 bg-slate-100 rounded-full flex items-center justify-center text-[9px] font-black text-slate-500 border border-slate-200">
-            {targetEmployee.initials}
-          </div>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto p-8 space-y-6">
         
-        {/* --- 2. HEADER (System Live & Decreased Name Size) --- */}
+        {/* --- 2. HEADER --- */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-md">
@@ -144,77 +147,81 @@ export function DashboardContent({
               <span className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter">System Live</span>
             </div>
             <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
-              {targetEmployee.isSelf ? authName : targetEmployee.name}
+              {authName}
             </h1>
           </div>
-
-          {isAuthority && (
-            <div className="relative w-full max-w-xs">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
-                type="text" placeholder="SEARCH ID..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="w-full pl-11 pr-20 py-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:border-blue-500 transition-all shadow-sm"
-              />
-              <button 
-                onClick={handleSearch}
-                disabled={isSearching}
-                className="absolute right-2 top-2 bottom-2 px-4 bg-slate-900 text-white text-[9px] font-black uppercase rounded-xl disabled:opacity-50"
-              >
-                {isSearching ? '...' : 'Find'}
-              </button>
-            </div>
-          )}
         </header>
 
-        {/* --- 3. TILES (Decreased Size, Larger Names, No Network Nodes) --- */}
-        <section className={`grid grid-cols-1 ${isAuthority ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
-          {isAuthority && (
-            <MetricTile title="Staff Count" value={totalEmployees} color="blue" loading={loading} />
-          )}
-          <MetricTile title="Orders Done" value={stats.totalOrders} color="blue" loading={loading} />
+        {/* --- 3. TILES GRID --- */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all">
-             <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-2">Mistakes</h3>
-             <div className="text-5xl font-black text-rose-600 italic tracking-tighter leading-none mb-3">
+          <MetricTile title="Orders Done" value={stats.totalOrders} color="blue" loading={loading} icon={<Package size={16} />} />
+          
+          {/* Mistakes Card */}
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Mistakes</h3>
+                <TriangleAlert size={16} className="text-rose-500" />
+              </div>
+              <div className="text-5xl font-black text-rose-600 italic tracking-tighter leading-none mb-3">
                 {loading ? '...' : stats.totalMistakes}
-             </div>
-             <div className="text-2xl font-black text-slate-400 uppercase tracking-tighter">
-                RM {stats.totalMyrLoss.toFixed(2)} <span className="text-[10px] text-slate-300 ml-1">Impact</span>
-             </div>
+              </div>
+            </div>
+            <div className="text-xl font-black text-slate-400 uppercase tracking-tighter border-t border-slate-50 pt-2">
+              RM {stats.totalMyrLoss.toFixed(2)} <span className="text-[10px] text-slate-300 ml-1">Impact</span>
+            </div>
           </div>
-        </section>
 
-        {/* --- 5. EFFICIENCY INDEX (Small Size) --- */}
-        <section className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-xl border border-slate-800">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-6">
-              <div className="text-center md:text-left">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500 block mb-1">Efficiency Index</span>
-                <div className="text-7xl font-black italic tracking-tighter text-blue-400 leading-none">
-                  {loading ? '...' : stats.overallPerformance}
+          {/* DYNAMIC TOP PERFORMER TILE WITH HISTORICAL NOTATIONS */}
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden">
+            {stats.topPerformer?.isHistorical && (
+              <div className="absolute top-0 right-0 left-0 bg-amber-500/10 text-amber-700 text-[8px] font-black uppercase text-center py-1 tracking-wider border-b border-amber-500/20">
+                Last Recorded Performance
+              </div>
+            )}
+            
+            <div className={`flex items-center justify-between mb-2 ${stats.topPerformer?.isHistorical ? 'mt-4' : ''}`}>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Top Performer</h3>
+              <Crown size={16} className="text-amber-500 fill-amber-500" />
+            </div>
+
+            {loading ? (
+              <div className="text-xl font-black text-slate-400 italic">...</div>
+            ) : stats.topPerformer && stats.topPerformer.name !== "N/A" ? (
+              <div className="my-1 flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0 flex items-center justify-center">
+                    {stats.topPerformer.profilePhoto ? (
+                      <img src={stats.topPerformer.profilePhoto} alt={stats.topPerformer.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-xs font-black text-slate-400 uppercase">{stats.topPerformer.name.slice(0, 2)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-md font-black text-slate-900 uppercase truncate tracking-tight">{stats.topPerformer.name}</h4>
+                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-wider truncate">{stats.topPerformer.project}</p>
+                  </div>
+                </div>
+                
+                {/* Historical Date Footnote Labels */}
+                <div className="text-[8px] font-bold text-slate-400 uppercase mt-1 bg-slate-50 p-1.5 rounded-lg border border-slate-100 flex justify-between">
+                  <span>Shift: {stats.topPerformer.shift}</span>
+                  <span>{stats.topPerformer.date}</span>
                 </div>
               </div>
-            </div>
-            
-            <div className="w-full md:w-80 space-y-3">
-              <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-400">
-                <span>Reliability Flow</span>
-                <span>{stats.overallPerformance}%</span>
-              </div>
-              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-0.5">
-                <div 
-                  className="h-full bg-blue-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
-                  style={{ width: `${Math.min(100, Math.max(0, stats.overallPerformance))}%` }} 
-                />
-              </div>
+            ) : (
+              <div className="text-xs font-black text-slate-300 uppercase tracking-widest my-3">No Active Staff</div>
+            )}
+
+            <div className="text-xl font-black text-slate-400 uppercase tracking-tighter border-t border-slate-50 pt-2">
+              {loading ? '...' : (stats.topPerformer?.ordersCount || 0)} <span className="text-[10px] text-slate-300 ml-1">Orders</span>
             </div>
           </div>
+
         </section>
 
-        {/* --- 6. LEAVES CHART (Replaced Availability Flow Tiles) --- */}
+        {/* --- 4. LEAVES TABLE --- */}
         <section className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
           <div className="flex items-center gap-4 mb-10">
             <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
@@ -228,6 +235,7 @@ export function DashboardContent({
               <thead>
                 <tr className="text-left border-b border-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
                   <th className="pb-5 px-4">Employee Name</th>
+                  <th className="pb-5 px-4 text-center">Project</th>
                   <th className="pb-5 px-4 text-right">Date of Leave</th>
                 </tr>
               </thead>
@@ -240,6 +248,11 @@ export function DashboardContent({
                           {leave.employee_name}
                         </span>
                       </td>
+                      <td className="py-5 px-4 text-center">
+                        <span className="inline-block bg-slate-100 text-slate-700 px-3 py-1 rounded-md text-[10px] font-black uppercase">
+                          {leave.project || 'General'}
+                        </span>
+                      </td>
                       <td className="py-5 px-4 text-right">
                         <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl text-[11px] font-black text-slate-600 uppercase">
                           <Activity size={12} className="text-blue-400" />
@@ -250,7 +263,7 @@ export function DashboardContent({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={2} className="py-20 text-center">
+                    <td colSpan={3} className="py-20 text-center">
                       <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">No Pending Records</p>
                     </td>
                   </tr>
@@ -264,14 +277,27 @@ export function DashboardContent({
   );
 }
 
-function MetricTile({ title, value, loading }: any) {
+interface MetricTileProps {
+  title: string;
+  value: number;
+  color?: string;
+  loading: boolean;
+  icon?: React.ReactNode;
+}
+
+function MetricTile({ title, value, loading, icon }: MetricTileProps) {
   return (
-    <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all">
-      <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-2">{title}</h3>
-      <div className="text-5xl font-black text-blue-600 italic tracking-tighter leading-none mb-3">
-        {loading ? '...' : value}
+    <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{title}</h3>
+          {icon && <div className="text-slate-400">{icon}</div>}
+        </div>
+        <div className="text-5xl font-black text-blue-600 italic tracking-tighter leading-none mb-3">
+          {loading ? '...' : value}
+        </div>
       </div>
-      <div className="h-1 w-10 bg-slate-50 rounded-full" />
+      <div className="h-1 w-10 bg-slate-100 rounded-full" />
     </div>
   );
 }

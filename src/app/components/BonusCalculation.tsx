@@ -1,351 +1,403 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  Search, Trophy, RefreshCcw, Plus, Trash2,
-  Lock, Sparkles, Layers, Settings2, Save
-} from 'lucide-react';
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import { Search, User, Briefcase, DollarSign, Loader2, Calendar, Target, ShieldAlert, Lock } from 'lucide-react';
 
-// --- Configuration ---
-const API_BASE_URL = "http://localhost:5000/api/bonus";
-const PROJECTS_API_URL = "http://localhost:5000/api/projects"; 
-
-interface BonusTier {
-  threshold: number;
-  bonus: number;
+interface BonusCalculationProps {
+  employeeDesignation?: string; // Links directly to userData.role ("Super Admin", "Employees", etc.)
+  currentEmployeeId?: string;    // Links directly to userData.employee_id
 }
 
-interface Project {
-  id: string; // Changed from _id to match Supabase
-  name: string;
-  bonus_tiers?: BonusTier[]; // Changed to snake_case to match DB
-}
-
-interface DailyData {
+interface DailyBreakdownItem {
   date: string;
-  status: string;
   orders: number;
   mistakes: number;
   net: number;
+  status: 'Active' | 'Excluded';
 }
 
-interface CalculationResult {
-  success: boolean;
+interface BonusResult {
+  employeeId: string;
   employeeName: string;
-  totalOrders: number;
-  totalNet: number;
-  projectName: string;
-  dailyBreakdown: DailyData[];
+  project: string;
+  durationDays: number;
+  calculatedBonus: number;
+  metrics: {
+    totalOrders: number;
+    totalMistakes: number;
+    totalNet: number;
+    nextTierInfo: {
+      nextThreshold: number;
+      gapToNext: number;
+      potentialBonus: number;
+    } | null;
+  };
+  dailyBreakdown: DailyBreakdownItem[];
 }
 
-export function BonusCalculation() {
-  // --- Auth & Role Logic ---
-  const storedUser = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('tws_user') || '{}'); } catch { return {}; }
-  }, []);
+export default function BonusCalculation({ 
+  employeeDesignation = "Employees", 
+  currentEmployeeId = "" 
+}: BonusCalculationProps) {
 
-  const userRole = String(storedUser.role || 'Employees'); 
-  const isSuperAdmin = userRole.toUpperCase() === 'SUPER ADMIN' || userRole.toUpperCase() === 'ADMIN';
-  const userEmployeeId = String(storedUser.employee_id || '').trim().toUpperCase();
-  const userAssignedProject = String(storedUser.project || '').toUpperCase();
-
-  // Helper for Headers
-  const getAuthHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    'x-user-role': userRole,
-    'x-employee-id': userEmployeeId
-  }), [userRole, userEmployeeId]);
-
-  // --- Configuration States ---
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [newThreshold, setNewThreshold] = useState('');
-  const [newBonus, setNewBonus] = useState('');
+  // --- PRIVILEGE VERIFICATION MECHANISM ---
+  const userRole = (employeeDesignation || '').trim();
   
-  // --- Dashboard States ---
-  const [employeeSearchId, setEmployeeSearchId] = useState(isSuperAdmin ? '' : userEmployeeId);
-  const [dateRange, setDateRange] = useState({ 
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('en-CA'), 
-    end: new Date().toLocaleDateString('en-CA') 
+  // Matches management definitions used within your core system rules
+  const isManagement = [
+    'Super Admin', 'Admin', 'Supervisors', 'ER', 'TSP', 'LD'
+  ].includes(userRole);
+
+  const [formData, setFormData] = useState({
+    employeeId: isManagement ? '' : (currentEmployeeId || '').trim().toUpperCase(),
+    employeeName: '',
+    project: '',
+    startDate: '2026-06-01',
+    endDate: '2026-06-02',
   });
-  const [calculation, setCalculation] = useState<CalculationResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // --- Data Fetching: Projects ---
-  const fetchProjects = useCallback(async () => {
-    try {
-      const res = await fetch(PROJECTS_API_URL, { headers: getAuthHeaders() });
-      const data = await res.json();
-      
-      // Backend now returns raw array []
-      if (Array.isArray(data)) {
-        setProjects(data);
-        if (data.length > 0 && !selectedProjectId) setSelectedProjectId(data[0].id);
-      }
-    } catch (err) {
-      console.error("Project fetch failed", err);
+  // Structural sync hook if session variables render asynchronously
+  useEffect(() => {
+    if (!isManagement && currentEmployeeId) {
+      setFormData(prev => ({ ...prev, employeeId: currentEmployeeId.trim().toUpperCase() }));
     }
-  }, [selectedProjectId, getAuthHeaders]);
+  }, [currentEmployeeId, isManagement]);
 
-  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  const [result, setResult] = useState<BonusResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [fetchingEmp, setFetchingEmp] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
-  // --- Logic: Dynamic Bonus Engine ---
-  const metrics = useMemo(() => {
-    if (!calculation) return null;
-    
-    const activeProject = projects.find(p => 
-      isSuperAdmin ? p.id === selectedProjectId : p.name.toUpperCase() === userAssignedProject
-    );
-
-    const tiers = activeProject?.bonus_tiers || [];
-    const totalNet = calculation.totalNet;
-    
-    const sortedTiers = [...tiers].sort((a, b) => b.threshold - a.threshold);
-    const metTier = sortedTiers.find(t => totalNet >= t.threshold);
-    const nextTier = [...tiers].sort((a, b) => a.threshold - b.threshold).find(t => t.threshold > totalNet);
-
+  const getUserAuthHeaders = () => {
     return {
-      projectName: activeProject?.name || "Standard",
-      earnedBonus: metTier ? metTier.bonus : 0,
-      next: nextTier ? {
-        gap: nextTier.threshold - totalNet,
-        bonus: nextTier.bonus,
-        percent: Math.min(100, (totalNet / nextTier.threshold) * 100)
-      } : null
+      'Content-Type': 'application/json',
+      'x-user-role': userRole,
+      'x-employee-id': (currentEmployeeId || '').trim().toUpperCase()
     };
-  }, [calculation, projects, selectedProjectId, isSuperAdmin, userAssignedProject]);
+  };
 
-  // --- Handlers ---
-  const handleUpdateTiers = async () => {
-    if (!selectedProjectId) return;
-    setIsSaving(true);
+  // Debounced identity checker for administrative searches
+  useEffect(() => {
+    if (!formData.employeeId.trim()) {
+      setFormData(prev => ({ ...prev, employeeName: '', project: '' }));
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setFetchingEmp(true);
+      setError('');
+      try {
+        const response = await fetch(
+          `http://localhost:5000/api/bonus/public-search/${formData.employeeId.trim()}`,
+          {
+            method: 'GET',
+            headers: getUserAuthHeaders()
+          }
+        );
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setFormData(prev => ({
+            ...prev,
+            employeeName: data.name,
+            project: data.project
+          }));
+        } else {
+          setFormData(prev => ({ ...prev, employeeName: '', project: '' }));
+          setError(data.message || data.error || 'No employee record verified for this ID.');
+        }
+      } catch (err) {
+        console.error("Identity matching trace fault:", err);
+        setError('System validation link error.');
+      } finally {
+        setFetchingEmp(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [formData.employeeId, userRole, currentEmployeeId]);
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    // SECURITY WALL: Terminate input modifications immediately if an unauthorized profile attempts edits
+    if (!isManagement && e.target.name === 'employeeId') return;
+    
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleExecuteAnalysis = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setResult(null);
+
+    // Overwrite runtime payload to completely enforce standard employee isolation constraints
+    const baselinePayload = {
+      ...formData,
+      employeeId: isManagement ? formData.employeeId : (currentEmployeeId || '').trim().toUpperCase()
+    };
+
     try {
-      const targetProject = projects.find(p => p.id === selectedProjectId);
-      const res = await fetch(`${PROJECTS_API_URL}/${selectedProjectId}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ 
-          ...targetProject,
-          bonus_tiers: targetProject?.bonus_tiers 
-        })
+      const response = await fetch('http://localhost:5000/api/bonus/analyze', {
+        method: 'POST',
+        headers: getUserAuthHeaders(),
+        body: JSON.stringify(baselinePayload),
       });
-      if (res.ok) alert("Project Rules Synced Successfully");
-    } catch {
-      setError("Failed to save configuration.");
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Analysis configuration rejected.');
+      setResult(data.summary);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred generating evaluation.');
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
-  const handleCalculate = useCallback(async () => {
-    if (!employeeSearchId) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const url = `${API_BASE_URL}/calculate/${employeeSearchId}?startDate=${dateRange.start}&endDate=${dateRange.end}`;
-      const res = await fetch(url, { headers: getAuthHeaders() });
-      const result = await res.json();
-      
-      if (result.success) {
-        setCalculation(result);
-      } else {
-        setError(result.message || "Failed to calculate.");
-        setCalculation(null);
-      }
-    } catch {
-      setError("Server connection lost.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [employeeSearchId, dateRange, getAuthHeaders]);
-
-  useEffect(() => { 
-    if (!isSuperAdmin && userEmployeeId && projects.length > 0) {
-        handleCalculate(); 
-    }
-  }, [isSuperAdmin, userEmployeeId, handleCalculate, projects.length]);
-
   return (
-    <div className="flex-1 bg-[#F8FAFC] min-h-screen p-8 font-sans">
+    <div className="w-full min-h-screen bg-[#f8fafc] p-4 md:p-8 space-y-6 font-sans">
       
-      {/* 1. ADMIN CONFIGURATION BOX */}
-      {isSuperAdmin && (
-        <div className="max-w-7xl mx-auto mb-8 bg-white border-2 border-blue-50 rounded-[2.5rem] p-8 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-600 p-2 rounded-xl">
-                <Settings2 className="text-white w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-800 italic">Project Rules Setup</h3>
-            </div>
-            <button 
-              onClick={handleUpdateTiers} 
-              disabled={isSaving} 
-              className="flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all"
-            >
-              {isSaving ? <RefreshCcw size={14} className="animate-spin" /> : <Save size={14} />} 
-              {isSaving ? "Syncing..." : "Apply Rules"}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Project</label>
-              <select 
-                value={selectedProjectId} 
-                onChange={(e) => setSelectedProjectId(e.target.value)} 
-                className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm border-none outline-none"
-              >
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-
-            <div className="lg:col-span-3 space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Incentive Tier</label>
-              <div className="flex gap-3">
-                <input type="number" placeholder="Net Threshold" value={newThreshold} onChange={e => setNewThreshold(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl font-bold text-sm" />
-                <input type="number" placeholder="Bonus ($)" value={newBonus} onChange={e => setNewBonus(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl font-bold text-sm" />
-                <button 
-                  onClick={() => {
-                    if (!newThreshold || !newBonus) return;
-                    setProjects(projects.map(p => p.id === selectedProjectId ? { ...p, bonus_tiers: [...(p.bonus_tiers || []), { threshold: Number(newThreshold), bonus: Number(newBonus) }] } : p));
-                    setNewThreshold(''); setNewBonus('');
-                  }} 
-                  className="bg-blue-600 text-white px-6 rounded-2xl hover:bg-blue-700"
-                >
-                  <Plus size={24}/>
-                </button>
-              </div>
-
-              <div className="flex flex-wrap gap-2 mt-4">
-                {projects.find(p => p.id === selectedProjectId)?.bonus_tiers?.sort((a,b) => b.threshold - a.threshold).map((t, i) => (
-                  <div key={i} className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-2 rounded-xl border border-blue-100 font-black text-[10px] uppercase tracking-wider">
-                    <span>{t.threshold} Net = ${t.bonus}</span>
-                    <button onClick={() => {
-                      setProjects(projects.map(p => p.id === selectedProjectId ? { ...p, bonus_tiers: p.bonus_tiers?.filter((_, idx) => idx !== i) } : p));
-                    }} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+      {/* Structural Notice Banner (Only loaded for basic access visibility states) */}
+      {!isManagement && (
+        <div className="w-full bg-indigo-50 border border-indigo-100/70 p-4 rounded-2xl flex items-center gap-2 text-indigo-700 text-xs font-semibold">
+          <Lock className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span>Secure Mode: Access scope restricted exclusively to your logged employee identity (ID: {currentEmployeeId}).</span>
         </div>
       )}
 
-      {/* 2. MAIN DASHBOARD CONTENT */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Employee ID</label>
-                <div className="relative">
-                  {isSuperAdmin ? <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" /> : <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />}
-                  <input 
-                    type="text" 
-                    value={employeeSearchId} 
-                    readOnly={!isSuperAdmin} 
-                    onChange={(e) => setEmployeeSearchId(e.target.value.toUpperCase())} 
-                    className={`w-full pl-11 pr-4 py-4 rounded-2xl font-bold text-sm border-none ${!isSuperAdmin ? 'bg-blue-50/50 text-blue-700' : 'bg-slate-50'}`} 
+      {/* Primary Configuration Frame */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+        
+        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <form onSubmit={handleExecuteAnalysis} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              
+              {/* Employee ID Selector box */}
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Employee ID</label>
+                <div className="relative flex items-center">
+                  {fetchingEmp ? (
+                    <Loader2 className="absolute left-4 w-4 h-4 text-slate-400 animate-spin" />
+                  ) : !isManagement ? (
+                    <Lock className="absolute left-4 w-4 h-4 text-indigo-500 pointer-events-none" />
+                  ) : (
+                    <Search className="absolute left-4 w-4 h-4 text-slate-400 pointer-events-none" />
+                  )}
+                  <input
+                    type="text"
+                    name="employeeId"
+                    value={formData.employeeId}
+                    onChange={handleInputChange}
+                    placeholder="Ex: 1024"
+                    disabled={!isManagement}
+                    className={`w-full font-semibold py-3 pl-11 pr-4 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition text-sm ${
+                      !isManagement 
+                        ? 'bg-indigo-50/30 border border-indigo-100/40 text-indigo-600 font-bold cursor-not-allowed' 
+                        : 'bg-[#f4f6f9] text-slate-700'
+                    }`}
+                    required
                   />
                 </div>
               </div>
-              <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</label>
-                  <input type="date" value={dateRange.start} onChange={(e) => setDateRange(p => ({...p, start: e.target.value}))} className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm border-none" />
+
+              {/* Verified Identity Readout */}
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Employee Name</label>
+                <div className="relative flex items-center">
+                  <User className="absolute left-4 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={formData.employeeName}
+                    placeholder={fetchingEmp ? "Verifying records..." : "Employee name"}
+                    className="w-full bg-[#f4f6f9]/60 text-slate-500 font-semibold py-3 pl-11 pr-4 rounded-xl outline-none text-sm cursor-not-allowed"
+                    readOnly
+                  />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">End Date</label>
-                  <input type="date" value={dateRange.end} onChange={(e) => setDateRange(p => ({...p, end: e.target.value}))} className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-sm border-none" />
+              </div>
+
+              {/* Assignment Allocation Readout */}
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Project Name</label>
+                <div className="relative flex items-center">
+                  <Briefcase className="absolute left-4 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={formData.project}
+                    placeholder={fetchingEmp ? "Loading alignment..." : "Assigned project"}
+                    className="w-full bg-[#f4f6f9]/60 text-slate-500 font-semibold py-3 pl-11 pr-4 rounded-xl outline-none text-sm cursor-not-allowed"
+                    readOnly
+                  />
                 </div>
+              </div>
+
+              {/* Range Filters */}
+              <div className="flex flex-col space-y-1.5 sm:col-span-1 md:col-span-1">
+                <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Start Date</label>
+                <input
+                  type="date"
+                  name="startDate"
+                  value={formData.startDate}
+                  onChange={handleInputChange}
+                  className="w-full bg-[#f4f6f9] text-slate-700 font-semibold py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition text-sm cursor-pointer"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col space-y-1.5 sm:col-span-1 md:col-span-2">
+                <label className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">End Date</label>
+                <input
+                  type="date"
+                  name="endDate"
+                  value={formData.endDate}
+                  onChange={handleInputChange}
+                  className="w-full bg-[#f4f6f9] text-slate-700 font-semibold py-3 px-4 rounded-xl outline-none focus:ring-2 focus:ring-black/5 transition text-sm cursor-pointer"
+                  required
+                />
               </div>
             </div>
 
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold flex items-center gap-2">
-                <RefreshCcw size={14} /> {error}
-              </div>
-            )}
-
-            <button onClick={handleCalculate} className="mt-6 w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-black transition-all">
-              {isLoading ? "Analyzing..." : "Execute Bonus Analysis"}
+            <button
+              type="submit"
+              disabled={loading || fetchingEmp || !formData.employeeName}
+              className="w-full bg-black hover:bg-zinc-900 text-white font-bold tracking-[0.15em] text-xs py-3.5 rounded-xl uppercase transition-all duration-200 disabled:bg-zinc-200 disabled:text-slate-400 disabled:cursor-not-allowed mt-2 shadow-sm"
+            >
+              {loading ? 'Evaluating Parameters...' : 'Execute Bonus Analysis'}
             </button>
-          </div>
+          </form>
 
-          {calculation && (
-            <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50/50">
-                  <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                    <th className="px-8 py-5">Date</th>
-                    <th className="px-8 py-5 text-right">Orders</th>
-                    <th className="px-8 py-5 text-right">Mistakes</th>
-                    <th className="px-8 py-5 text-right text-blue-600 bg-blue-50/30">Net Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 font-bold text-xs text-slate-600">
-                  {calculation.dailyBreakdown.map((day, i) => (
-                    <tr key={i} className="hover:bg-slate-50/80">
-                      <td className="px-8 py-4 font-mono">{day.date}</td>
-                      <td className="px-8 py-4 text-right">{day.orders}</td>
-                      <td className="px-8 py-4 text-right text-red-400">{day.mistakes}</td>
-                      <td className="px-8 py-4 text-right text-blue-600 bg-blue-50/20">{day.net}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-semibold flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 shrink-0" /> {error}
             </div>
           )}
         </div>
 
-        <div className="lg:col-span-4 space-y-6">
-          {calculation && metrics ? (
-            <>
-              <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden group">
-                <Trophy size={140} className="absolute -top-4 -right-4 p-8 opacity-5 group-hover:rotate-12 transition-transform duration-700" />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-8">
-                    <Layers size={14} className="text-blue-500" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">{metrics.projectName}</span>
-                  </div>
-                  <div className="flex justify-between items-end mb-10">
-                    <div><p className="text-[10px] text-slate-500 uppercase font-black">Total Net</p><h3 className="text-6xl font-black italic tracking-tighter">{calculation.totalNet}</h3></div>
-                  </div>
-                  <div className="pt-10 border-t border-white/5">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-blue-400">$</span>
-                      <h3 className="text-7xl font-black italic tracking-tighter leading-none">{metrics.earnedBonus}</h3>
-                    </div>
-                    <p className="text-[10px] font-black uppercase mt-4 tracking-widest text-slate-500 italic">Projected Bonus</p>
-                  </div>
+        {/* Presentation Core Summary Output */}
+        <div className="bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center min-h-[220px]">
+          {result ? (
+            <div className="w-full h-full flex flex-col justify-between space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">{result.employeeName}</h4>
+                  <p className="text-[11px] font-medium text-slate-400 mt-0.5 flex items-center gap-1">
+                    <Briefcase className="w-3 h-3" /> Allocation: {result.project}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Days</p>
+                  <p className="text-xs font-bold text-slate-700 flex items-center gap-1 justify-end mt-0.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> {result.durationDays} Days
+                  </p>
                 </div>
               </div>
 
-              {metrics.next && (
-                <div className="bg-blue-600 rounded-[2.5rem] p-8 text-white shadow-lg">
-                  <div className="flex items-center gap-2 mb-6">
-                    <Sparkles size={16} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Next Achievement</span>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-[#f4f6f9] p-3 rounded-xl text-center">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Orders</span>
+                  <span className="text-sm font-bold text-slate-700 block mt-0.5">{result.metrics.totalOrders}</span>
+                </div>
+                <div className="bg-[#f4f6f9] p-3 rounded-xl text-center">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Mistakes</span>
+                  <span className="text-sm font-bold text-red-500 block mt-0.5">{result.metrics.totalMistakes}</span>
+                </div>
+                <div className="bg-[#f4f6f9] p-3 rounded-xl text-center">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Net Score</span>
+                  <span className="text-sm font-bold text-indigo-600 block mt-0.5">{result.metrics.totalNet}</span>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50/60 border border-emerald-100/70 p-4 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="bg-emerald-500 text-white p-2 rounded-xl">
+                    <DollarSign className="w-4 h-4" />
                   </div>
-                  <p className="text-sm font-bold leading-relaxed mb-6">
-                    Earn <span className="text-2xl font-black text-blue-200">{metrics.next.gap}</span> more points to reach 
-                    <span className="font-black"> ${metrics.next.bonus}</span> bracket!
-                  </p>
-                  <div className="h-4 bg-white/20 rounded-full overflow-hidden p-1">
-                    <div className="h-full bg-white rounded-full transition-all" style={{ width: `${metrics.next.percent}%` }} />
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-700/80 uppercase tracking-wider block">Calculated Bonus</span>
+                    <span className="text-xs text-emerald-600 font-medium">Unlocked Milestone</span>
                   </div>
                 </div>
-              )}
-            </>
+                <span className="text-2xl font-black text-emerald-600">
+                  ${result.calculatedBonus}
+                </span>
+              </div>
+            </div>
           ) : (
-             <div className="h-full min-h-[300px] border-2 border-dashed border-slate-200 rounded-[3rem] flex flex-col items-center justify-center p-12 text-center">
-               <div className="bg-slate-100 p-4 rounded-full mb-4"><Search className="text-slate-300" size={32} /></div>
-               <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Enter ID for Insights</p>
-             </div>
+            <div className="text-center py-8 space-y-2">
+              <div className="w-12 h-12 bg-slate-50 border border-dashed border-slate-200 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                <Target className="w-5 h-5" />
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Metrics Presentation</p>
+              <p className="text-[11px] text-slate-400 max-w-[200px] mx-auto text-center">
+                {isManagement 
+                  ? "Enter an authorized employee profile ID to populate summary data views."
+                  : "Select targeted operational date windows to evaluate your active performance summary metrics."}
+              </p>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Operational List Breakdown View Table */}
+      <div className="w-full bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Operational Log Breakdown</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Day-by-day itemization of tracked data properties.</p>
+          </div>
+          {result && (
+            <div className="bg-indigo-50 text-indigo-600 font-bold text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-lg self-start sm:self-auto">
+              Evaluation Rule: Orders - (Mistakes × 5)
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <th className="py-3 px-4">Date</th>
+                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-center">Order Count</th>
+                <th className="py-3 px-4 text-center">Mistakes Incidence</th>
+                <th className="py-3 px-4 text-right">Net Metric Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result && result.dailyBreakdown.length > 0 ? (
+                result.dailyBreakdown.map((day, idx) => (
+                  <tr 
+                    key={idx} 
+                    className={`border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors text-xs font-semibold ${
+                      day.status === 'Excluded' ? 'opacity-50 bg-slate-50/20' : ''
+                    }`}
+                  >
+                    <td className="py-3.5 px-4 text-slate-600 font-medium">{day.date}</td>
+                    <td className="py-3.5 px-4 text-center">
+                      <span className={`inline-block text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md font-bold ${
+                        day.status === 'Active' 
+                          ? 'bg-emerald-50 text-emerald-600' 
+                          : 'bg-amber-50 text-amber-600'
+                      }`}>
+                        {day.status}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-slate-700">{day.orders}</td>
+                    <td className="py-3.5 px-4 text-center text-red-500">{day.mistakes}</td>
+                    <td className={`py-3.5 px-4 text-right font-bold ${day.net < 0 ? 'text-red-500' : 'text-slate-800'}`}>
+                      {day.status === 'Excluded' ? '-' : day.net}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-xs font-medium text-slate-400">
+                    No timeline tracking data parsed to display.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, Pencil, Trash2, Loader2, X, Home, 
-  Building2, ShieldAlert, ChevronRight, Briefcase,
+  Building2, ShieldAlert, ChevronRight, 
   AlertCircle, CheckCircle2, Info
 } from 'lucide-react';
 
 interface Department {
-  id: string;
+  id: number; // ✅ FIXED: Changed string to number to align with MySQL Auto-Incrementing IDs
   name: string;
   employees_count: number;
   status: 'Active' | 'Inactive';
@@ -17,7 +17,7 @@ export function Departments() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null); // ✅ FIXED: Typed to number | null
   const [userRole, setUserRole] = useState<string>('');
   
   // Custom Alert/Notification State
@@ -53,7 +53,11 @@ export function Departments() {
         headers: { 'x-user-role': userRole }
       });
       const data = await response.json();
-      if (data.success) setDepartments(data.departments);
+      
+      // ✅ FIXED: Normalized fallback to accept either .data or .departments structure safely
+      if (data.success) {
+        setDepartments(data.data || data.departments || []);
+      }
     } catch (error) {
       setNotification({ message: "Failed to sync registry", type: 'error' });
     } finally {
@@ -133,6 +137,7 @@ export function Departments() {
         setNotification({ message: data.message, type: 'error' });
       }
     } catch {
+      setDeleteConfirm(null);
       setNotification({ message: "Delete operation failed", type: 'error' });
     } finally {
       setDeleteConfirm(null);
@@ -207,6 +212,13 @@ export function Departments() {
               <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4 opacity-20" />
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Synchronizing Registry...</span>
             </div>
+          ) : departments.length === 0 ? (
+            <div className="p-32 text-center flex flex-col items-center">
+              <div className="bg-slate-50 p-6 rounded-full mb-4">
+                <Building2 className="w-12 h-12 text-slate-200" />
+              </div>
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No Business Units Found</p>
+            </div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
@@ -220,12 +232,12 @@ export function Departments() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {departments.map((dept) => (
-                  <tr key={dept.id} className="hover:bg-blue-50/30 transition-colors group">
+                  <tr key={dept.id} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-8 py-5">
                       <div className="flex flex-col">
                         <span className="font-black text-slate-900 tracking-tight text-base uppercase italic">{dept.name}</span>
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5 italic">
-                          ID: {dept.id.slice(0, 8)} • REG: {new Date(dept.created_date).toLocaleDateString()}
+                          NODE ID: {dept.id} • REG: {new Date(dept.created_date).toLocaleDateString()}
                         </span>
                       </div>
                     </td>
@@ -237,16 +249,30 @@ export function Departments() {
                         <span className="text-[9px] font-black uppercase tracking-widest">{dept.status}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {canCreateOrUpdate && (
-                          <button onClick={() => handleOpenEditModal(dept)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                        )}
-                        {canDelete && (
-                          <button onClick={() => setDeleteConfirm(dept)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
-                        )}
-                      </div>
-                    </td>
+                    {(canCreateOrUpdate || canDelete) && (
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {canCreateOrUpdate && (
+                            <button 
+                              onClick={() => handleOpenEditModal(dept)} 
+                              className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                              title="Edit Department"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button 
+                              onClick={() => setDeleteConfirm(dept)} 
+                              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                              title="Delete Department"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -285,7 +311,7 @@ export function Departments() {
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Department Nomenclature</label>
                 <div className="relative group">
@@ -300,7 +326,20 @@ export function Departments() {
                   />
                 </div>
               </div>
-              <div className="flex gap-4">
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Operational State</label>
+                <select
+                  className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold outline-none focus:border-blue-500/20 focus:bg-white transition-all appearance-none"
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value as 'Active' | 'Inactive'})}
+                >
+                  <option value="Active">ACTIVE</option>
+                  <option value="Inactive">INACTIVE</option>
+                </select>
+              </div>
+
+              <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-4 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
                 <button type="submit" className="flex-1 px-4 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black shadow-xl transition-all active:scale-95">
                   {editingId ? 'Save Changes' : 'Confirm Entry'}

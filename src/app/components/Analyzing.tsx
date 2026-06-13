@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, User, AlertTriangle, FileWarning, Keyboard, 
   ShoppingBag, Banknote, Filter, ArrowLeft, LucideIcon, 
-  Users, Info, Loader2 
+  Users, Info, Loader2, Construction, Hammer, Settings
 } from 'lucide-react';
 
 // Pointing back to your local development server
 const API_BASE_URL = 'http://localhost:5000';
 
 export function Analyzing({ onBack }: { onBack?: () => void }) {
+  // --- TOGGLE FOR WORK IN PROGRESS STATUS ---
+  const isPageUnderConstruction = true; 
+
   // Filters & State
   const [selectionMode, setSelectionMode] = useState<'single' | 'all'>('single');
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,6 +28,7 @@ export function Analyzing({ onBack }: { onBack?: () => void }) {
 
   // 1. Load Projects from Backend
   useEffect(() => {
+    if (isPageUnderConstruction) return; // Skip if under development
     const fetchProjects = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects`, {
@@ -42,7 +46,8 @@ export function Analyzing({ onBack }: { onBack?: () => void }) {
   // 2. Search Handler
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    
+    if (isPageUnderConstruction) return;
+
     if (selectionMode === 'single' && !searchQuery) {
       setError("Please enter an Employee ID");
       return;
@@ -78,7 +83,57 @@ export function Analyzing({ onBack }: { onBack?: () => void }) {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
+    <div className="relative p-4 md:p-8 space-y-6 animate-in fade-in duration-500 min-h-[80vh]">
+      
+      {/* WORK IN PROGRESS OVERLAY LAYER */}
+      {isPageUnderConstruction && (
+        <div className="absolute inset-0 bg-slate-50/60 backdrop-blur-[6px] z-50 rounded-[3rem] flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300">
+          <div className="bg-white p-10 md:p-14 rounded-[3.5rem] border border-slate-200/80 shadow-2xl max-w-lg space-y-6 relative overflow-hidden group">
+            {/* Top Amber Highlight Bar */}
+            <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500" />
+            
+            {/* Animated Icon Cluster */}
+            <div className="flex justify-center items-center gap-3 relative">
+              <Settings className="w-12 h-12 text-slate-800 animate-spin [animation-duration:8s]" />
+              <Hammer className="w-8 h-8 text-indigo-500 absolute -top-2 -right-2 transform rotate-12 group-hover:animate-bounce" />
+              <Construction className="w-6 h-6 text-amber-500 absolute -bottom-1 -left-2" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-xl font-black text-slate-900 uppercase italic tracking-wide">Module In Progress</h2>
+              <p className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.25em] bg-indigo-50 px-3 py-1.5 rounded-full w-fit mx-auto">
+                Database Engineering Syncing
+              </p>
+            </div>
+
+            <p className="text-xs font-bold text-slate-500 leading-relaxed max-w-sm mx-auto">
+              The performance analytics calculation queries are currently being optimized to link with the new attendance reporting structures.
+            </p>
+
+            {/* Simulated Progress bar */}
+            <div className="space-y-2 pt-2">
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-slate-900 h-full w-[75%] rounded-full animate-pulse" />
+              </div>
+              <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">
+                <span>Phase 2 deployment</span>
+                <span>75% Complete</span>
+              </div>
+            </div>
+
+            {/* Back Navigation Button out of jail */}
+            {onBack && (
+              <button 
+                onClick={onBack}
+                className="mt-4 px-6 py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-600 transition-all inline-flex items-center gap-2"
+              >
+                <ArrowLeft className="w-3 h-3" /> Return to Dashboard
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

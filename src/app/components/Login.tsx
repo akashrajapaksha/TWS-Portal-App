@@ -39,10 +39,28 @@ export function Login({ onLoginSuccess }: LoginProps) {
       const result = await response.json();
       if (response.ok && result.success) {
         setTempUser(result.user);
-        if (result.require2FA) setShow2FA(true);
-        else if (result.user.is_first_login) setMustChangePassword(true);
-        else {
-          localStorage.setItem('tws_user', JSON.stringify(result.user));
+        if (result.require2FA) {
+          setShow2FA(true);
+        } else if (result.user.is_first_login) {
+          setMustChangePassword(true);
+        } else {
+          // ✅ SCREEN 1: Standard Login save sequence with profile_image injection included
+          localStorage.setItem('tws_user', JSON.stringify({
+            id: result.user.id,
+            name: result.user.name,
+            role: result.user.role,
+            initials: result.user.initials,
+            employee_id: result.user.employee_id,
+            profile_image: result.user.profile_image // Added tracking prop directly here
+          }));
+          sessionStorage.setItem('tws_user', JSON.stringify({
+            id: result.user.id,
+            name: result.user.name,
+            role: result.user.role,
+            initials: result.user.initials,
+            employee_id: result.user.employee_id,
+            profile_image: result.user.profile_image // Also safe-track on fallback context systems
+          }));
           onLoginSuccess();
         }
       } else {
@@ -67,7 +85,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
       });
       const result = await response.json();
       if (response.ok && result.success) {
-        // REDESIGNED MESSAGE: Identity Verified - (Role) - (Name)
         const userRole = result.user.role || 'Personnel';
         const userName = result.user.name || result.user.full_name || 'User';
         setSuccessMsg(`Identity Verified - ${userRole} - ${userName}`);
@@ -77,8 +94,18 @@ export function Login({ onLoginSuccess }: LoginProps) {
           setMustChangePassword(true);
           setShow2FA(false);
         } else {
-          localStorage.setItem('tws_user', JSON.stringify(result.user));
-          // Increased timeout to 1.5s so user can read their details
+          // ✅ SCREEN 2: 2FA Verification save sequence with profile_image tracking logic 
+          const verifiedUserPayload = {
+            id: result.user.id,
+            name: result.user.name,
+            role: result.user.role,
+            initials: result.user.initials,
+            employee_id: result.user.employee_id,
+            profile_image: result.user.profile_image // Capture payload image key property safely
+          };
+          
+          localStorage.setItem('tws_user', JSON.stringify(verifiedUserPayload));
+          sessionStorage.setItem('tws_user', JSON.stringify(verifiedUserPayload));
           setTimeout(() => onLoginSuccess(), 1500);
         }
       } else {
@@ -111,7 +138,16 @@ export function Login({ onLoginSuccess }: LoginProps) {
       const result = await response.json();
       if (response.ok && result.success) {
         setSuccessMsg("Credentials Secured!");
-        localStorage.setItem('tws_user', JSON.stringify({ ...tempUser, is_first_login: false }));
+        
+        // ✅ SCREEN 3: Password Update save sequence with profile_image propagation loop 
+        const updatedUserPayload = { 
+          ...tempUser, 
+          is_first_login: false,
+          profile_image: tempUser.profile_image // Map down string payload from earlier setup step securely
+        };
+
+        localStorage.setItem('tws_user', JSON.stringify(updatedUserPayload));
+        sessionStorage.setItem('tws_user', JSON.stringify(updatedUserPayload));
         setTimeout(() => onLoginSuccess(), 1000);
       } else {
         setError(result.message || 'Failed to update credentials.');
@@ -249,7 +285,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           )}
 
           <p className="mt-10 text-center text-[9px] font-bold text-gray-300 uppercase tracking-[0.25em] leading-loose">
-            INTERNAL SYSTEM DEVELOPED BY IT DEPARTMENT SRI LANKA {new Date().getFullYear()}
+            INTERNAL SYSTEM DEVELOPED BY IT DEPARTMENT SRI LANKA 2026
           </p>
         </div>
       </div>

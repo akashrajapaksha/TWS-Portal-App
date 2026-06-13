@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Pencil, Trash2, X, Loader2, Eye, EyeOff, Home, UserPlus, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, X, Loader2, Eye, EyeOff, Home, UserPlus, CheckCircle2, AlertCircle, Info, Image, ShieldCheck } from 'lucide-react';
 
 /** --- CONSTANTS & TYPES --- **/
 const ROLE_RANK: Record<string, number> = {
@@ -18,6 +18,7 @@ interface Employee {
   email: string; department: string; project: string; designation: string;
   status: string; role: string; gender: string; dob: string;
   date_of_joining: string; address: string; annual_leave: number; casual_leave: number;
+  two_factor_secret?: string; profile_image?: string;
 }
 
 interface DropdownItem { id: string | number; name: string; }
@@ -33,7 +34,7 @@ export function Employees() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Replacement for browser alerts
+  // Custom alert overlays
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Employee | null>(null);
 
@@ -45,10 +46,10 @@ export function Employees() {
   const canDelete = ['Super Admin', 'Supervisors', 'ER'].includes(currentUserRole);
 
   const [formData, setFormData] = useState({
-    employee_id: '', name: '', initials: '', phone_number: '', email: '',
+    employee_id: '', name: '', initials: '', email: '',
     department: '', project: '', designation: '', status: 'Probation',
-    gender: 'Male', dob: '', date_of_joining: '', address: '',
-    role: 'Employees', password: '', annual_leave: 0, casual_leave: 0,
+    date_of_joining: '', role: 'Employees', password: '', 
+    annual_leave: 0, casual_leave: 0, two_factor_secret: '', profile_image: ''
   });
 
   // Notification Timer
@@ -63,13 +64,11 @@ export function Employees() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-
       const authHeaders = { 'x-user-role': currentUserRole };
-
 
       const [empRes, depRes, projRes] = await Promise.all([
         fetch('http://localhost:5000/api/employees', { headers: authHeaders }),
-        fetch('http://localhost:5000/api/departments', { headers: authHeaders }), // Added header here
+        fetch('http://localhost:5000/api/departments', { headers: authHeaders }),
         fetch('http://localhost:5000/api/projects', { headers: authHeaders })
       ]);
 
@@ -130,7 +129,7 @@ export function Employees() {
       await fetch(`http://localhost:5000/api/employees/${deleteConfirm.id}?admin_id=${savedUser.employee_id}&admin_name=${savedUser.name}&emp_name=${deleteConfirm.name}`, {
         method: 'DELETE', headers: { 'x-user-role': currentUserRole }
       });
-      setNotification({ message: "Employee deleted", type: 'info' });
+      setNotification({ message: "Employee record deleted successfully", type: 'info' });
       fetchData();
     } catch (err) { 
         setNotification({ message: "Delete failed", type: 'error' });
@@ -141,10 +140,10 @@ export function Employees() {
 
   const resetForm = () => {
     setFormData({
-      employee_id: '', name: '', initials: '', phone_number: '', email: '',
+      employee_id: '', name: '', initials: '', email: '',
       department: '', project: '', designation: '', status: 'Probation',
-      gender: 'Male', dob: '', date_of_joining: '', address: '',
-      role: 'Employees', password: '', annual_leave: 0, casual_leave: 0,
+      date_of_joining: '', role: 'Employees', password: '', 
+      annual_leave: 0, casual_leave: 0, two_factor_secret: '', profile_image: ''
     });
     setEditingId(null);
     setShowPassword(false);
@@ -235,12 +234,12 @@ export function Employees() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {employees.filter(e => e.name?.toLowerCase().includes(searchQuery.toLowerCase()) || e.employee_id.toLowerCase().includes(searchQuery.toLowerCase())).map((emp) => (
+                  {employees.filter(e => e.name?.toLowerCase().includes(searchQuery.toLowerCase()) || e.employee_id?.toLowerCase().includes(searchQuery.toLowerCase())).map((emp) => (
                     <tr key={emp.id} className="hover:bg-indigo-50/20 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-                            {emp.initials || emp.name.charAt(0)}
+                            {emp.initials || emp.name?.charAt(0) || 'E'}
                           </div>
                           <div><p className="font-semibold text-gray-900">{emp.name}</p></div>
                         </div>
@@ -251,16 +250,24 @@ export function Employees() {
                       <td className="px-6 py-4"><p className="text-[11px] text-indigo-500 font-bold uppercase tracking-tight">{emp.project || 'General'}</p></td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-1">
-                          <button 
-                            onClick={() => { 
-                                setEditingId(emp.id); 
-                                setFormData({ ...emp, password: '' }); 
-                                setShowModal(true); 
-                            }} 
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          {canAddOrUpdate && (
+                            <button 
+                              onClick={() => { 
+                                  setEditingId(emp.id); 
+                                  setFormData({ 
+                                    ...formData,
+                                    ...emp, 
+                                    password: '',
+                                    two_factor_secret: emp.two_factor_secret || '',
+                                    profile_image: emp.profile_image || ''
+                                  }); 
+                                  setShowModal(true); 
+                              }} 
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
                           {canDelete && (
                             <button onClick={() => setDeleteConfirm(emp)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
                               <Trash2 className="w-4 h-4" />
@@ -289,6 +296,8 @@ export function Employees() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-8 overflow-y-auto grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+              
+              {/* CORE IDENTITY BLOCK */}
               <div className="md:col-span-3 flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest border-b pb-2 mb-2">
                 <span className="w-2 h-2 bg-indigo-600 rounded-full"></span> Core Identity
               </div>
@@ -305,6 +314,40 @@ export function Employees() {
                 <input className="form-input-custom" value={formData.initials} onChange={e => setFormData({ ...formData, initials: e.target.value })} />
               </div>
 
+              {/* PROFILE IMAGE STORAGE SECTION */}
+              <div className="md:col-span-3 flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest border-b pb-2 mb-2 mt-4">
+                <span className="w-2 h-2 bg-indigo-600 rounded-full"></span> Media Configuration
+              </div>
+              <div className="md:col-span-3 space-y-2">
+                <label className="text-xs font-bold text-gray-500 ml-1 flex items-center gap-1.5">
+                  <Image size={14} className="text-indigo-500" /> PROFILE PICTURE RESOURCE
+                </label>
+                <div className="flex items-center gap-4 p-4 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    id="profile-img-upload"
+                    className="hidden" 
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setFormData({ ...formData, profile_image: file.name });
+                      }
+                    }} 
+                  />
+                  <label 
+                    htmlFor="profile-img-upload" 
+                    className="cursor-pointer px-4 py-2 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded-xl hover:bg-slate-50 transition-colors shadow-sm uppercase tracking-wide"
+                  >
+                    Choose Image File
+                  </label>
+                  <span className="text-xs text-slate-400 font-medium truncate">
+                    {formData.profile_image || "No image resource mounted"}
+                  </span>
+                </div>
+              </div>
+
+              {/* ORGANIZATIONAL PLACEMENT BLOCK */}
               <div className="md:col-span-3 flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest border-b pb-2 mb-2 mt-4">
                 <span className="w-2 h-2 bg-indigo-600 rounded-full"></span> Organizational Placement
               </div>
@@ -335,7 +378,20 @@ export function Employees() {
                   ))}
                 </select>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 ml-1">EMPLOYMENT STATUS</label>
+                <select className="form-input-custom" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                  <option value="Probation">Probation</option>
+                  <option value="Permanent">Permanent</option>
+                  <option value="Resigned">Resigned</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 ml-1">DATE OF JOINING</label>
+                <input type="date" className="form-input-custom" value={formData.date_of_joining} onChange={e => setFormData({ ...formData, date_of_joining: e.target.value })} />
+              </div>
 
+              {/* SECURITY & ACCESS CONTROL BLOCK */}
               <div className="md:col-span-3 flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest border-b pb-2 mb-2 mt-4">
                 <span className="w-2 h-2 bg-indigo-600 rounded-full"></span> Security & Access
               </div>
@@ -378,6 +434,24 @@ export function Employees() {
                 </button>
               </div>
 
+              {/* SUPER ADMIN CONDITIONAL 2FA KEY ENTRY */}
+              {currentUserRole === 'Super Admin' && (
+                <div className="md:col-span-3 space-y-1.5 p-4 border border-indigo-100 rounded-2xl bg-indigo-50/20 mt-2">
+                  <label className="text-xs font-black text-indigo-700 flex items-center gap-1.5 tracking-wide">
+                    <ShieldCheck size={14} /> TWO-FACTOR AUTHENTICATION SECRET CODE (SUPER ADMIN EXCLUSIVE)
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="ENTER 2FA SECRET CODE MAPPER" 
+                    className="form-input-custom uppercase"
+                    value={formData.two_factor_secret}
+                    onChange={e => setFormData({ ...formData, two_factor_secret: e.target.value })}
+                  />
+                  <span className="text-[10px] text-slate-400 block ml-1">Assign an alphanumeric seed string here to seed code generation arrays.</span>
+                </div>
+              )}
+
+              {/* LEAVE ALLOCATION BLOCK */}
               <div className="md:col-span-3 flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest border-b pb-2 mb-2 mt-4">
                 <span className="w-2 h-2 bg-indigo-600 rounded-full"></span> Leave Allocation
               </div>
@@ -390,6 +464,7 @@ export function Employees() {
                 <input type="number" className="form-input-custom" value={formData.casual_leave} onChange={e => setFormData({ ...formData, casual_leave: Number(e.target.value) })} />
               </div>
 
+              {/* ACTIONS FOOTER */}
               <div className="md:col-span-3 flex justify-end gap-3 pt-6 border-t mt-4">
                 <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2.5 text-gray-600 font-bold hover:bg-gray-100 rounded-xl">Cancel</button>
                 <button type="submit" className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">

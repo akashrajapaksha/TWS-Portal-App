@@ -14,6 +14,12 @@ interface Order {
   order_count: number;
 }
 
+// Helper to normalize dates into clean YYYY-MM-DD formats for inputs and tables
+const formatDateString = (dateInput: string) => {
+  if (!dateInput) return '';
+  return dateInput.split('T')[0];
+};
+
 export function AddOrder() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,6 +80,7 @@ export function AddOrder() {
       if (data.success) setOrders(data.orders);
     } catch (err) {
       console.error("Error fetching data:", err);
+      triggerToast("Could not load performance logs", "error");
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +90,7 @@ export function AddOrder() {
     if (canViewPage && userRole) fetchOrders();
   }, [fetchOrders, canViewPage, userRole]);
 
-  // Employee Auto-Lookup
+  // Employee Auto-Lookup Engine
   useEffect(() => {
     const lookupEmployee = async () => {
       if (formData.employeeId.trim().length < 3 || editingId) return;
@@ -172,7 +179,7 @@ export function AddOrder() {
       });
       const data = await response.json();
       if (data.success) {
-        triggerToast(editingId ? "Ledger updated" : "Performance record saved");
+        triggerToast(editingId ? "Ledger updated successfully" : "Performance record saved successfully");
         closeModal();
         fetchOrders();
       } else {
@@ -247,7 +254,8 @@ export function AddOrder() {
                     <div className="font-bold text-gray-900">{order.employee_name}</div>
                     <div className="text-[10px] font-black text-blue-600 bg-blue-50 w-fit px-1.5 rounded border border-blue-100 mt-0.5">{order.employee_id}</div>
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-700">{order.date} <div className="text-gray-400 text-[10px] font-bold uppercase">{order.shift}</div></td>
+                  {/* ✅ FIXED: Wrapped order.date in formatDateString to hide raw database timestamps */}
+                  <td className="px-6 py-4 text-sm font-medium text-gray-700">{formatDateString(order.date)} <div className="text-gray-400 text-[10px] font-bold uppercase">{order.shift}</div></td>
                   <td className="px-6 py-4 font-mono text-xs text-gray-600">{order.employee_position}</td>
                   <td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-black text-sm">{order.order_count}</span></td>
                   <td className="px-6 py-4 text-right">
@@ -259,7 +267,8 @@ export function AddOrder() {
                             employeeId: order.employee_id, 
                             employeeName: order.employee_name, 
                             employeePosition: order.employee_position, 
-                            date: order.date, 
+                            // ✅ FIXED: Safely scrub dynamic string timestamps so HTML5 calendar binds perfectly
+                            date: formatDateString(order.date), 
                             shift: order.shift, 
                             orderCount: order.order_count.toString() 
                           }); 

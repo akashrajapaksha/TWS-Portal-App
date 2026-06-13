@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, X, Check, Calendar, BarChart3, Loader2, User, Clock, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, X, Check, Calendar, BarChart3, Loader2, Clock, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 // --- Types ---
 interface LeaveApplication {
-  id: string;
+  id: number; // Updated from string to number to cleanly align with MySQL INT AUTO_INCREMENT
   employee_id: string;
   employee_name: string;
   leave_type: string;
@@ -65,12 +65,15 @@ export function Leaves() {
   const fetchData = useCallback(async (currentUser: any) => {
     setLoading(true);
     try {
-      const isPrivileged = ['Super Admin', 'ER'].includes(currentUser.role);
+      const isPrivileged = ['SUPER ADMIN', 'ER', 'ADMIN', 'SUPERVISORS'].includes(currentUser.role?.trim().toUpperCase());
       setIsAdmin(isPrivileged);
 
       const endpoint = isPrivileged ? '/all' : `/my-leaves/${currentUser.id}`;
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: { 'x-user-role': currentUser.role }
+        headers: { 
+          'x-user-role': currentUser.role,
+          'x-employee-id': currentUser.id 
+        }
       });
       const data = await res.json();
       if (data.success) setApplications(data.leaves);
@@ -85,6 +88,7 @@ export function Leaves() {
       }
     } catch (error) {
       console.error('Fetch error:', error);
+      showToast("Error retrieving database sync pipelines", "error");
     } finally {
       setLoading(false);
     }
@@ -142,15 +146,18 @@ export function Leaves() {
         setShowAddModal(false);
         fetchData(user);
         showToast("Application submitted successfully!");
+        setFormData({ leaveType: 'Medical', fromDate: '', toDate: '', totalDays: 0, reason: '' }); // Clean data state
       } else {
         showToast(data.message, 'error');
       }
+    } catch (err) {
+      showToast("Failed to post record allocation", "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const updateStatus = (id: string, status: string, leaveType: string) => {
+  const updateStatus = (id: number, status: string, leaveType: string) => {
     setConfirmModal({
       isOpen: true,
       title: `${status} Application`,
@@ -167,7 +174,8 @@ export function Leaves() {
               status, 
               admin_id: user.id, 
               admin_name: user.name, 
-              leave_type: leaveType 
+              leave_type: leaveType,
+              employee_id: user.id
             })
           });
           const data = await res.json();
@@ -291,7 +299,7 @@ export function Leaves() {
                     <td className="px-10 py-6 font-black text-gray-900 uppercase tracking-tighter text-lg">{app.employee_name}</td>
                     <td className="px-10 py-6">
                       <div className={`font-black uppercase tracking-tighter text-sm ${['Medical', 'No Pay'].includes(app.leave_type) ? 'text-red-500' : 'text-blue-600'}`}>{app.leave_type} Leave</div>
-                      <div className="text-xs font-bold text-gray-400 italic">{app.number_of_days} Days ({app.start_date} - {app.end_date})</div>
+                      <div className="text-xs font-bold text-gray-400 italic">{app.number_of_days} Days ({new Date(app.start_date).toLocaleDateString()} - {new Date(app.end_date).toLocaleDateString()})</div>
                     </td>
                     <td className="px-10 py-6 text-center">
                       <span className={`px-5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border-2 ${

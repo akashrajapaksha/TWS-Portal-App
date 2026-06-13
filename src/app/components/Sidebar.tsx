@@ -22,6 +22,7 @@ interface SidebarProps {
   employeeName?: string;
   employeeDesignation?: string; 
   employeeInitials?: string;
+  profileImage?: string; // ✅ Receives base64 image string or file path from DB
 }
 
 interface SubMenuItem {
@@ -45,7 +46,8 @@ export function Sidebar({
   isCollapsed = false,
   employeeName = "Admin TWS",
   employeeDesignation = "Employees", 
-  employeeInitials = ""
+  employeeInitials = "",
+  profileImage = "" // ✅ Destructured default assignment
 }: SidebarProps) {
   
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -102,7 +104,6 @@ export function Sidebar({
       subItems: [
         { id: 'leaves', label: 'Leaves', visible: true },
         { id: 'attendance-records', label: 'Attendance', visible: true },
-        // --- NEW SUB MENU ITEM ADDED HERE ---
         { id: 'attendance-reports', label: 'Reports', visible: isAuthority }, 
       ]
     },
@@ -148,14 +149,29 @@ export function Sidebar({
         
         <div className="p-6">
           <div className="bg-gray-100 rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-200/50">
-            <div className="w-12 h-12 bg-indigo-600 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow-inner italic">
-              {employeeInitials || <Users className="w-5 h-5" />}
+            
+            {/* ✅ FIXED AVATAR WRAPPER WITH STRICT BOUNDS AND LAYOUT CLIPPING */}
+            <div className="w-12 h-12 bg-indigo-600 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow-inner overflow-hidden relative">
+              {profileImage ? (
+                <img 
+                  src={profileImage} 
+                  alt={employeeName} 
+                  className="w-full h-full object-cover object-center absolute inset-0 block layout-contain"
+                  onError={(e) => {
+                    // Graceful fallback to UI text representation if base64 breaks
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <span className="italic">{employeeInitials || <Users className="w-5 h-5" />}</span>
+              )}
             </div>
-            <div className="overflow-hidden">
+
+            <div className="overflow-hidden flex-1">
               <div className="font-bold text-gray-900 text-sm truncate leading-tight uppercase italic" title={employeeName}>
                   {employeeName}
               </div>
-              <div className="text-[10px] uppercase tracking-widest text-indigo-500 font-black mt-0.5">
+              <div className="text-[10px] uppercase tracking-widest text-indigo-500 font-black mt-0.5 truncate">
                   {employeeDesignation}
               </div>
             </div>

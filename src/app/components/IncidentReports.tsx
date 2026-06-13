@@ -52,10 +52,11 @@ export function IncidentReports() {
   const isEmployee = userRole === 'Employees';
   const isAdmin = userRole === 'Admin';
 
+  // State declaration handles amount safely as a string type to handle empty text fields seamlessly
   const [formData, setFormData] = useState({
     fullName: '', nickName: '', initials: '', empNo: '', position: '',
     details: '', dateIncident: new Date().toISOString().split('T')[0],
-    description: '', prevention: '', amount: 0
+    description: '', prevention: '', amount: ''
   });
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -72,7 +73,7 @@ export function IncidentReports() {
     } catch (err) {
       console.error("Fetch error:", err);
     } finally {
-      setLoading(false);
+      loading && setLoading(false);
     }
   }, [userRole, loggedInEmployeeId, searchId]);
 
@@ -157,7 +158,11 @@ export function IncidentReports() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData, adminId: loggedInEmployeeId, adminName: savedUser.name, userRole: userRole
+          ...formData,
+          amount: parseFloat(formData.amount) || 0, // Fallback handles blank text inputs as 0 safely
+          adminId: loggedInEmployeeId, 
+          adminName: savedUser.name, 
+          userRole: userRole
         }),
       });
       const data = await res.json();
@@ -168,7 +173,7 @@ export function IncidentReports() {
         setFormData({
           fullName: '', nickName: '', initials: '', empNo: '', position: '',
           details: '', dateIncident: new Date().toISOString().split('T')[0],
-          description: '', prevention: '', amount: 0
+          description: '', prevention: '', amount: ''
         });
       }
     } catch (err) { showToast("❌ Error saving IR.", 'error'); }
@@ -204,7 +209,7 @@ export function IncidentReports() {
         <div className="flex flex-col items-center">
           <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">Financial Impact</span>
           <span className="px-2 py-1 rounded-lg font-black text-xs bg-red-50 text-red-700 flex items-center gap-1">
-            <Banknote className="w-3 h-3" /> MYR {report.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            <Banknote className="w-3 h-3" /> LKR {report.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
         </div>
       );
@@ -421,8 +426,14 @@ export function IncidentReports() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nature of Incident</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nature of Incident (Details)</label>
                 <textarea rows={2} required className="w-full p-3.5 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-sm outline-none resize-none" value={formData.details} onChange={(e) => setFormData({...formData, details: e.target.value})} />
+              </div>
+
+              {/* Added explicit form text field block for general Description input required by back-end schema */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Incident Description Summary</label>
+                <textarea rows={2} className="w-full p-3.5 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-sm outline-none resize-none" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
               </div>
 
               <div className="grid grid-cols-2 gap-6">
@@ -432,12 +443,12 @@ export function IncidentReports() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">Monetary Loss (If any)</label>
-                  <input type="number" step="0.01" className="w-full p-3.5 bg-red-50/30 border-2 border-transparent focus:border-red-500 rounded-2xl font-black text-sm outline-none text-red-600" value={formData.amount} onChange={(e) => setFormData({...formData, amount: parseFloat(e.target.value)})} />
+                  <input type="number" step="0.01" className="w-full p-3.5 bg-red-50/30 border-2 border-transparent focus:border-red-500 rounded-2xl font-black text-sm outline-none text-red-600" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Corrective Action</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Corrective Action / Prevention Plan</label>
                 <textarea rows={2} className="w-full p-3.5 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-sm outline-none resize-none" value={formData.prevention} onChange={(e) => setFormData({...formData, prevention: e.target.value})} />
               </div>
 

@@ -61,7 +61,7 @@ export function AddMistakes() {
 
   const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ ...toast, show: false }), 3000);
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
 
   const isEmployee = userRole === 'Employees';
@@ -75,8 +75,11 @@ export function AddMistakes() {
       const res = await fetch('http://localhost:5000/api/mistakes');
       const data = await res.json();
       if (data.success) setMistakes(data.mistakes);
-    } catch (error) { console.error("Fetch Error:", error); }
-    finally { setIsLoading(false); }
+    } catch (error) { 
+      console.error("Fetch Error:", error); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const handleIdLookup = async (id: string) => {
@@ -98,8 +101,11 @@ export function AddMistakes() {
         } else {
           setFormData(prev => ({ ...prev, employee_name: 'EMPLOYEE NOT FOUND' }));
         }
-      } catch (err) { console.error("Lookup failed"); } 
-      finally { setIsFetchingEmp(false); }
+      } catch (err) { 
+        console.error("Lookup failed"); 
+      } finally { 
+        setIsFetchingEmp(false); 
+      }
     } else {
       setFormData(prev => ({ ...prev, employee_name: '', project: '' }));
     }
@@ -124,10 +130,13 @@ export function AddMistakes() {
         triggerToast("Log deleted successfully");
         fetchMistakes();
       } else {
-        triggerToast(data.message, 'error');
+        triggerToast(data.message || "Failed to delete record", 'error');
       }
-    } catch (error) { triggerToast("Server connection failed", 'error'); }
-    finally { setDeleteConfirm({ show: false, item: null }); }
+    } catch (error) { 
+      triggerToast("Server connection failed", 'error'); 
+    } finally { 
+      setDeleteConfirm({ show: false, item: null }); 
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,7 +170,9 @@ export function AddMistakes() {
       } else {
         triggerToast(result.message || result.error, 'error');
       }
-    } catch (error) { triggerToast("Server connection failed", 'error'); }
+    } catch (error) { 
+      triggerToast("Server connection failed", 'error'); 
+    }
   };
 
   const resetForm = () => {
@@ -171,6 +182,11 @@ export function AddMistakes() {
     });
     setEditingId(null);
   };
+
+  const filteredMistakes = mistakes.filter(m => 
+    m.employeeid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.employee_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (isEmployee) {
     return (
@@ -187,7 +203,7 @@ export function AddMistakes() {
   return (
     <div className="flex-1 bg-gray-50 h-screen overflow-auto relative">
       
-      {/* REALISTIC TOAST */}
+      {/* TOAST NOTIFICATION */}
       <div className={`fixed top-10 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 transform ${
         toast.show ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0 pointer-events-none'
       }`}>
@@ -214,7 +230,7 @@ export function AddMistakes() {
             
             <div className="relative w-full md:w-96">
                 <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input type="text" placeholder="Search Employee ID..." className="pl-12 pr-4 py-3 border border-gray-200 rounded-xl w-full outline-none focus:border-red-500 bg-white font-medium shadow-sm transition-all" onChange={(e) => setSearchQuery(e.target.value)} />
+                <input type="text" placeholder="Search ID or Name..." className="pl-12 pr-4 py-3 border border-gray-200 rounded-xl w-full outline-none focus:border-red-500 bg-white font-medium shadow-sm transition-all" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
         </div>
 
@@ -233,7 +249,9 @@ export function AddMistakes() {
               <tbody className="divide-y divide-gray-100">
                 {isLoading ? (
                   <tr><td colSpan={5} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-red-500 w-8 h-8" /></td></tr>
-                ) : mistakes.filter(m => m.employeeid?.toLowerCase().includes(searchQuery.toLowerCase())).map((m) => (
+                ) : filteredMistakes.length === 0 ? (
+                  <tr><td colSpan={5} className="py-10 text-center text-sm text-gray-400 font-medium">No mistake logs matches your selection.</td></tr>
+                ) : filteredMistakes.map((m) => (
                     <tr key={m.id} className="hover:bg-red-50/30 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -261,7 +279,17 @@ export function AddMistakes() {
                         <div className="flex justify-end items-center gap-1">
                           {canModify && <button onClick={() => {
                             setEditingId(m.id);
-                            setFormData({...m});
+                            setFormData({
+                              employeeid: m.employeeid || '',
+                              employee_name: m.employee_name || '',
+                              project: m.project || '',
+                              employee_position: m.employee_position || '',
+                              date: m.date ? m.date.split('T')[0] : new Date().toISOString().split('T')[0],
+                              shift: m.shift || '',
+                              mistake_type: m.mistake_type || '',
+                              amount: m.amount || 0,
+                              count: m.count || 0
+                            });
                             setShowModal(true);
                           }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Edit2 className="w-4 h-4"/></button>}
                           {canDelete && <button onClick={() => setDeleteConfirm({ show: true, item: m })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-4 h-4"/></button>}
@@ -367,7 +395,7 @@ export function AddMistakes() {
                     <label className="text-[10px] font-black text-red-600 uppercase block">Penalty Amount (MYR)</label>
                     {ZERO_COUNT_MISTAKES.includes(formData.mistake_type) && <span className="text-[9px] font-bold text-white bg-red-400 px-2 py-0.5 rounded italic">0 Count Mistake</span>}
                   </div>
-                  <input type="number" step="0.01" className="bg-transparent border-b-2 border-red-200 w-full text-3xl font-black text-red-700 outline-none" value={formData.amount} onChange={(e) => setFormData({...formData, amount: parseFloat(e.target.value)})} />
+                  <input type="number" step="0.01" className="bg-transparent border-b-2 border-red-200 w-full text-3xl font-black text-red-700 outline-none" value={formData.amount} onChange={(e) => setFormData({...formData, amount: parseFloat(e.target.value) || 0})} />
                 </div>
               ) : (
                 <div className={`col-span-2 p-5 rounded-2xl border transition-all duration-300 ${ZERO_COUNT_MISTAKES.includes(formData.mistake_type) ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-100'}`}>
@@ -380,7 +408,7 @@ export function AddMistakes() {
                     disabled={ZERO_COUNT_MISTAKES.includes(formData.mistake_type)}
                     className={`bg-transparent border-b-2 w-full text-3xl font-black outline-none transition-all ${ZERO_COUNT_MISTAKES.includes(formData.mistake_type) ? 'border-gray-200 text-gray-300' : 'border-blue-200 text-blue-700'}`} 
                     value={formData.count} 
-                    onChange={(e) => setFormData({...formData, count: parseInt(e.target.value)})}
+                    onChange={(e) => setFormData({...formData, count: parseInt(e.target.value) || 0})}
                   />
                 </div>
               )}

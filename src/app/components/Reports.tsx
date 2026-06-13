@@ -39,6 +39,13 @@ export function Reports() {
   const loggedInEmployeeId = savedUser.employee_id || '';
   const isEmployee = userRole === 'Employees';
 
+  // Helper function to format SQL Date strings cleanly
+  const formatDateDisplay = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const d = new Date(dateString);
+    return isNaN(d.getTime()) ? dateString : d.toISOString().split('T')[0];
+  };
+
   // Automatically fetch if user is an Employee
   useEffect(() => {
     if (isEmployee) {
@@ -47,7 +54,6 @@ export function Reports() {
   }, []);
 
   const fetchPerformanceData = async () => {
-    // If admin/other, they must enter a search ID. If employee, it uses their logged-in ID.
     if (!isEmployee && !searchId) {
       alert("Please enter an Employee ID to search.");
       return;
@@ -96,11 +102,11 @@ export function Reports() {
         )}
       </div>
 
-      {/* Filter Bar - Visibility depends on Role */}
+      {/* Filter Bar */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           
-          {/* Search ID: Hidden or Read-only for Employees */}
+          {/* Search ID */}
           <div className="relative">
             <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block ml-1">Target Employee</label>
             <div className="relative">
@@ -200,7 +206,7 @@ export function Reports() {
                   <tbody className="divide-y divide-gray-50">
                     {report.financialMistakes.map((m, i) => (
                       <tr key={i} className="hover:bg-red-50/10 transition-colors">
-                        <td className="px-5 py-2 text-gray-500 font-medium">{m.date}</td>
+                        <td className="px-5 py-2 text-gray-500 font-medium">{formatDateDisplay(m.date)}</td>
                         <td className="px-5 py-2 font-bold text-red-700">{m.mistake_type}</td>
                         <td className="px-5 py-2 font-black text-right text-red-600">RM {Number(m.amount || 0).toFixed(2)}</td>
                       </tr>
@@ -228,7 +234,7 @@ export function Reports() {
                 <tbody className="divide-y divide-gray-50">
                   {report.orderRecords.map((r, i) => (
                     <tr key={i} className="hover:bg-blue-50/20 transition-colors">
-                      <td className="px-5 py-2 text-gray-500 font-medium">{r.date}</td>
+                      <td className="px-5 py-2 text-gray-500 font-medium">{formatDateDisplay(r.date)}</td>
                       <td className="px-5 py-2 font-black text-right text-blue-600">{r.order_count}</td>
                     </tr>
                   ))}
@@ -253,7 +259,7 @@ export function Reports() {
                 <tbody className="divide-y divide-gray-50">
                   {report.mistakeRecords.map((r, i) => (
                     <tr key={i} className="hover:bg-amber-50/20 transition-colors">
-                      <td className="px-5 py-2 text-gray-500 font-medium">{r.date}</td>
+                      <td className="px-5 py-2 text-gray-500 font-medium">{formatDateDisplay(r.date)}</td>
                       <td className="px-5 py-2 font-bold text-gray-700">{r.mistake_type}</td>
                       <td className="px-5 py-2 font-black text-right text-amber-600">{r.count}</td>
                     </tr>

@@ -6,21 +6,21 @@ import {
 } from 'lucide-react';
 
 interface Project {
-  id: string;
+  id: number; // ✅ FIXED: Changed string to number to match MySQL auto-increment values
   name: string;
   client: string;
   status: string;
   deadline: string;
+  created_date: string;
 }
 
 export function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null); // ✅ FIXED: Explicitly typed number
   const [userRole, setUserRole] = useState<string>('');
   
-  // Custom Feedback State
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Project | null>(null);
 
@@ -54,7 +54,12 @@ export function Projects() {
         headers: { 'x-user-role': userRole }
       });
       const data = await res.json();
-      if (data.success) setProjects(data.projects || []);
+      
+      if (data.success) {
+        setProjects(data.data || []); 
+      } else {
+        setNotification({ message: data.message || "Failed to load data", type: 'error' });
+      }
     } catch (err) {
       setNotification({ message: "Network sync failed", type: 'error' });
     } finally {
@@ -168,7 +173,6 @@ export function Projects() {
   return (
     <div className="flex-1 bg-[#F8FAFC] h-screen overflow-auto font-sans relative">
       
-      {/* REALISTIC TOAST */}
       {notification && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
           <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border ${
@@ -185,7 +189,6 @@ export function Projects() {
         </div>
       )}
 
-      {/* HEADER */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 sticky top-0 z-30 flex justify-between items-center">
         <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
           <Home className="w-3.5 h-3.5" />
@@ -229,29 +232,43 @@ export function Projects() {
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100">
                   <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Project Identity</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client / Status</th>
                   <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Administrative Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {projects.map((p) => (
-                  <tr key={p.id} className="hover:bg-blue-50/30 transition-colors group">
+                  <tr key={p.id} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-8 py-5">
                       <div className="flex flex-col">
                         <span className="font-black text-slate-900 tracking-tight text-base uppercase italic">{p.name}</span>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">
-                          Node: {p.id.slice(0, 8)} • Deliverable Status: Active
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-slate-700 uppercase">{p.client || 'Internal'}</span>
+                        <span className={`text-[9px] font-bold uppercase mt-1 ${p.status === 'Completed' ? 'text-emerald-500' : 'text-blue-500'}`}>
+                          {p.status}
                         </span>
                       </div>
                     </td>
                     <td className="px-8 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2">
                         {canCreateOrUpdate && (
-                          <button onClick={() => handleOpenEdit(p)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                          <button 
+                            onClick={() => handleOpenEdit(p)} 
+                            className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                            title="Edit Project"
+                          >
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
                         {canDelete && (
-                          <button onClick={() => setDeleteConfirm(p)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                          <button 
+                            onClick={() => setDeleteConfirm(p)} 
+                            className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                            title="Delete Project"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -295,7 +312,7 @@ export function Projects() {
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Project Nomenclature</label>
                 <div className="relative group">
@@ -310,7 +327,33 @@ export function Projects() {
                   />
                 </div>
               </div>
-              <div className="flex gap-4">
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Client Identification</label>
+                <input
+                  type="text"
+                  placeholder="ENTER CLIENT NAME"
+                  className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold outline-none focus:border-blue-500/20 focus:bg-white transition-all uppercase"
+                  value={formData.client}
+                  onChange={(e) => setFormData({...formData, client: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Project Lifecycle Status</label>
+                <select
+                  className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold outline-none focus:border-blue-500/20 focus:bg-white transition-all appearance-none"
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                >
+                  <option value="In Progress">IN PROGRESS</option>
+                  <option value="Active">ACTIVE</option>
+                  <option value="Completed">COMPLETED</option>
+                  <option value="On Hold">ON HOLD</option>
+                </select>
+              </div>
+
+              <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-4 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
                 <button type="submit" className="flex-1 px-4 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black shadow-xl transition-all active:scale-95">
                   {editingId ? 'Sync Updates' : 'Initialize Node'}

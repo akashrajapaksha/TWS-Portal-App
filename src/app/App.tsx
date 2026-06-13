@@ -7,7 +7,7 @@ import { Projects } from './components/Projects';
 import { Employees } from './components/Employees';
 import { AddOrder } from './components/AddOrder';
 import { AddMistakes } from './components/AddMistakes';
-import { BonusCalculation } from './components/BonusCalculation';
+import BonusCalculation from './components/BonusCalculation';
 import { Reports } from './components/Reports';
 import { Leaves } from './components/Leaves';
 import { LoginLogs } from './components/LoginLogs';
@@ -62,6 +62,7 @@ interface UserData {
   role: string;          
   initials: string;
   employee_id: string;
+  profile_image?: string; // ✅ ADDED: Capture profile image string from local state initialization
 }
 
 export default function App() {
@@ -81,7 +82,8 @@ export default function App() {
           name: parsed.name,
           role: parsed.role,
           initials: parsed.initials,
-          employee_id: parsed.employee_id
+          employee_id: parsed.employee_id,
+          profile_image: parsed.profile_image // ✅ ADDED: Track field value from session caching layers
         };
       } catch (err) {
         console.error("Session parse error", err);
@@ -126,7 +128,8 @@ export default function App() {
         name: parsedUser.name,
         role: parsedUser.role,
         initials: parsedUser.initials,
-        employee_id: parsedUser.employee_id
+        employee_id: parsedUser.employee_id,
+        profile_image: parsedUser.profile_image // ✅ ADDED: Ensure incoming field parsing is cleanly captured upon successful authentication
       });
       setIsAuthenticated(true);
       setActiveMenuItem('dashboard');
@@ -172,8 +175,15 @@ export default function App() {
       case 'employees': return <Employees />;
       case 'add-order': return <AddOrder />;
       case 'add-mistakes': return <AddMistakes />;
-      case 'bonus-calculation': return <BonusCalculation />; 
-      case 'reports': return <Reports />; // Performance Reports
+      
+      case 'bonus-calculation': 
+        return (
+          <BonusCalculation 
+            employeeDesignation={userData?.role} 
+            currentEmployeeId={userData?.employee_id} 
+          />
+        ); 
+      case 'reports': return <Reports />; 
       case 'ir': return <IncidentReports />;
       case 'warning-letter': return <WarningLetters />;
       case 'leaves': return <Leaves />;
@@ -186,7 +196,6 @@ export default function App() {
           />
         );
 
-      // ✅ Map to your brand new Attendance Reports page
       case 'attendance-reports': 
         return <AttendanceReports />;
 
@@ -244,6 +253,7 @@ export default function App() {
             employeeName={userData?.name}
             employeeDesignation={userData?.role} 
             employeeInitials={userData?.initials}
+            profileImage={userData?.profile_image} // ✅ ADDED: Pass down profile_image state value directly into the Sidebar prop
           />
         </div>
         
