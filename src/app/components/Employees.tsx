@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Pencil, Trash2, X, Loader2, Eye, EyeOff, Home, UserPlus, CheckCircle2, AlertCircle, Info, Image, ShieldCheck } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, X, Loader2, Eye, EyeOff, Home, UserPlus, CheckCircle2, AlertCircle, Info, Image, ShieldCheck, User } from 'lucide-react';
 
 /** --- CONSTANTS & TYPES --- **/
 const ROLE_RANK: Record<string, number> = {
@@ -23,6 +23,11 @@ interface Employee {
 
 interface DropdownItem { id: string | number; name: string; }
 
+interface FormState extends Omit<Employee, 'id' | 'phone_number' | 'gender' | 'dob' | 'address' | 'profile_image'> {
+  password?: string;
+  profile_image: File | string | null;
+}
+
 export function Employees() {
   // State Management
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -33,6 +38,10 @@ export function Employees() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // New Profile Details Modal States
+  const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [fetchingProfile, setFetchingProfile] = useState(false);
 
   // Custom alert overlays
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
@@ -45,11 +54,11 @@ export function Employees() {
   const canAddOrUpdate = ['Super Admin', 'Supervisors', 'ER', 'Admin'].includes(currentUserRole);
   const canDelete = ['Super Admin', 'Supervisors', 'ER'].includes(currentUserRole);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     employee_id: '', name: '', initials: '', email: '',
     department: '', project: '', designation: '', status: 'Probation',
     date_of_joining: '', role: 'Employees', password: '', 
-    annual_leave: 0, casual_leave: 0, two_factor_secret: '', profile_image: ''
+    annual_leave: 0, casual_leave: 0, two_factor_secret: '', profile_image: null
   });
 
   // Notification Timer
@@ -88,26 +97,68 @@ export function Employees() {
     if (isAuthorized) fetchData();
   }, [isAuthorized, fetchData]);
 
+  // Fetch single detailed profile when an employee name link is clicked
+  const handleViewDetails = async (id: string) => {
+    setFetchingProfile(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/employees/profile/${id}`, {
+        headers: { 'x-user-role': currentUserRole }
+      });
+      const result = await res.json();
+      if (result.success) {
+        setViewingEmployee(result.employee);
+      } else {
+        setNotification({ message: result.message || "Failed to fetch profile details", type: 'error' });
+      }
+    } catch (err) {
+      setNotification({ message: "Network error fetching profile details", type: 'error' });
+    } finally {
+      setFetchingProfile(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = editingId ? `http://localhost:5000/api/employees/${editingId}` : 'http://localhost:5000/api/employees/add';
 
-    const payload: any = { 
-        ...formData, 
-        admin_id: savedUser.employee_id,
-        admin_name: savedUser.name || 'Admin' 
-    };
+    // ✅ Switch payload assembly from a JSON string to a FormData Object boundary
+    const formPayload = new FormData();
+    
+    // Add operational log metadata trace identifiers
+    formPayload.append('admin_id', savedUser.employee_id || '');
+    formPayload.append('admin_name', savedUser.name || 'Admin');
 
-    if (payload.password) payload.password = payload.password.trim();
-    if (editingId && (!formData.password || formData.password.trim() === '')) {
-        delete payload.password;
-    }
+    // Append regular data keys mapping loops
+    Object.keys(formData).forEach((key) => {
+      const value = (formData as any)[key];
+      
+      if (key === 'profile_image') {
+        // ✅ Only append if a brand new physical image file is introduced
+        if (value instanceof File) {
+          formPayload.append('profile_image', value);
+        } else if (typeof value === 'string') {
+          // Keep existing string fallback reference if editing without picking a new asset
+          formPayload.append('profile_image', value);
+        }
+      } else if (key === 'password') {
+        if (value && value.trim() !== '') {
+          formPayload.append('password', value.trim());
+        }
+      } else {
+        // Safe standard data normalization transfer format string map
+        formPayload.append(key, value !== undefined && value !== null ? String(value) : '');
+      }
+    });
 
     try {
       const res = await fetch(url, {
         method: editingId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-role': currentUserRole },
-        body: JSON.stringify(payload),
+        headers: { 
+          // Note: DO NOT set 'Content-Type' explicitly when sending FormData.
+          // The browser automatically structures multipart/form-data along with bounds configurations.
+          'x-user-role': currentUserRole 
+        },
+        body: formPayload,
       });
       const result = await res.json();
       if (result.success) {
@@ -143,7 +194,7 @@ export function Employees() {
       employee_id: '', name: '', initials: '', email: '',
       department: '', project: '', designation: '', status: 'Probation',
       date_of_joining: '', role: 'Employees', password: '', 
-      annual_leave: 0, casual_leave: 0, two_factor_secret: '', profile_image: ''
+      annual_leave: 0, casual_leave: 0, two_factor_secret: '', profile_image: null
     });
     setEditingId(null);
     setShowPassword(false);
@@ -154,6 +205,13 @@ export function Employees() {
   return (
     <div className="flex-1 bg-[#f8fafc] h-screen overflow-auto font-sans relative">
       
+      {/* LOADING OVERLAY FOR VIEW DETAILS ACTIONS */}
+      {fetchingProfile && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-[1px] flex items-center justify-center z-[110]">
+          <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
+        </div>
+      )}
+
       {/* CUSTOM NOTIFICATION OVERLAY */}
       {notification && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
@@ -238,10 +296,30 @@ export function Employees() {
                     <tr key={emp.id} className="hover:bg-indigo-50/20 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
-                            {emp.initials || emp.name?.charAt(0) || 'E'}
+                          {/* ✅ Displays Public Upload Target Server URL Reference */}
+                          {emp.profile_image ? (
+                            <img 
+                              src={`http://localhost:5000/${emp.profile_image}`} 
+                              alt="Profile" 
+                              className="w-10 h-10 rounded-full object-cover border border-slate-100 shadow-sm"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                              {emp.initials || emp.name?.charAt(0) || 'E'}
+                            </div>
+                          )}
+                          <div>
+                            <button 
+                              type="button"
+                              onClick={() => handleViewDetails(emp.id)}
+                              className="font-semibold text-gray-900 hover:text-indigo-600 text-left hover:underline focus:outline-none transition-colors"
+                            >
+                              {emp.name}
+                            </button>
                           </div>
-                          <div><p className="font-semibold text-gray-900">{emp.name}</p></div>
                         </div>
                       </td>
                       <td><p className="text-xs text-gray-500">{emp.employee_id}</p></td>
@@ -259,7 +337,7 @@ export function Employees() {
                                     ...emp, 
                                     password: '',
                                     two_factor_secret: emp.two_factor_secret || '',
-                                    profile_image: emp.profile_image || ''
+                                    profile_image: emp.profile_image || null
                                   }); 
                                   setShowModal(true); 
                               }} 
@@ -283,6 +361,125 @@ export function Employees() {
           )}
         </div>
       </main>
+
+      {/* POPUP MODAL: SHOW FULL EMPLOYEE DETAILS MATRIX */}
+      {viewingEmployee && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col scale-in border border-slate-100">
+            
+            {/* Header Banner */}
+            <div className="p-6 border-b flex justify-between items-center bg-indigo-600 text-white">
+              <h2 className="text-base font-black uppercase tracking-wider flex items-center gap-2">
+                <User size={18} /> Employee Profile Details
+              </h2>
+              <button 
+                onClick={() => setViewingEmployee(null)} 
+                className="p-1.5 hover:bg-indigo-700/50 text-white rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Profile Information Panel View */}
+            <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh]">
+              
+              {/* Profile Main Header Layout */}
+              <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
+                {viewingEmployee.profile_image ? (
+                  <img 
+                    src={`http://localhost:5000/${viewingEmployee.profile_image}`} 
+                    alt="Profile Avatar" 
+                    className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-sm"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg border border-indigo-100 shadow-sm">
+                    {viewingEmployee.initials || viewingEmployee.name?.charAt(0) || 'E'}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">{viewingEmployee.name || '-'}</h3>
+                  <span className="inline-block mt-1 text-xs font-black uppercase tracking-wider px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full">
+                    {viewingEmployee.designation || 'Staff'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Multi-Column Meta Fields Context Matrix */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Employee ID</span>
+                  <span className="font-bold text-slate-800">{viewingEmployee.employee_id || '-'}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Initials</span>
+                  <span className="font-semibold text-slate-800">{viewingEmployee.initials || '-'}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Email Address</span>
+                  <span className="font-semibold text-slate-800">{viewingEmployee.email || '-'}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Department</span>
+                  <span className="font-semibold text-slate-800">{viewingEmployee.department || 'No Dept'}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Assigned Project</span>
+                  <span className="font-semibold text-indigo-600 font-bold uppercase text-xs tracking-tight">{viewingEmployee.project || 'General'}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Access System Role</span>
+                  <span className="font-semibold text-slate-800">{viewingEmployee.role || 'Employees'}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Employment Status</span>
+                  <span className="font-semibold text-slate-800">{viewingEmployee.status || 'Probation'}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">Date of Joining</span>
+                  <span className="font-semibold text-slate-800">
+                    {viewingEmployee.date_of_joining ? new Date(viewingEmployee.date_of_joining).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not Configured'}
+                  </span>
+                </div>
+
+                {/* Conditional 2FA Display (Visible to Super Admin users inside detail sheets) */}
+                {currentUserRole === 'Super Admin' && viewingEmployee.two_factor_secret && (
+                  <div className="col-span-2 p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-indigo-600" />
+                    <div>
+                      <span className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">2FA Secret Key Mapping</span>
+                      <span className="font-mono text-xs font-bold text-slate-700 uppercase">{viewingEmployee.two_factor_secret}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Leave Metrics Module Matrix Grid */}
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-0.5">Annual Allocation</span>
+                  <span className="text-xl font-black text-slate-800">{viewingEmployee.annual_leave || 0} <span className="text-xs text-slate-400 font-normal">Days</span></span>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-0.5">Casual Allocation</span>
+                  <span className="text-xl font-black text-slate-800">{viewingEmployee.casual_leave || 0} <span className="text-xs text-slate-400 font-normal">Days</span></span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Actions Footer wrapper */}
+            <div className="p-4 bg-gray-50/50 border-t flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => setViewingEmployee(null)} 
+                className="px-6 py-2 bg-slate-600 text-white rounded-xl text-xs font-bold hover:bg-slate-700 transition-colors shadow-md"
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -331,7 +528,7 @@ export function Employees() {
                     onChange={e => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        setFormData({ ...formData, profile_image: file.name });
+                        setFormData({ ...formData, profile_image: file });
                       }
                     }} 
                   />
@@ -341,8 +538,12 @@ export function Employees() {
                   >
                     Choose Image File
                   </label>
-                  <span className="text-xs text-slate-400 font-medium truncate">
-                    {formData.profile_image || "No image resource mounted"}
+                  <span className="text-xs text-slate-400 font-medium truncate max-w-xs">
+                    {formData.profile_image ? (
+                      formData.profile_image instanceof File ? formData.profile_image.name : String(formData.profile_image)
+                    ) : (
+                      "No image resource mounted"
+                    )}
                   </span>
                 </div>
               </div>

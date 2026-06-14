@@ -14,6 +14,12 @@ interface Order {
   order_count: number;
 }
 
+interface PerformanceEntry {
+  date: string;
+  shift: string;
+  order_count: string;
+}
+
 // Helper to normalize dates into clean YYYY-MM-DD formats for inputs and tables
 const formatDateString = (dateInput: string) => {
   if (!dateInput) return '';
@@ -33,16 +39,15 @@ export function AddOrder() {
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; item: Order | null }>({ show: false, item: null });
 
-  const initialFormState = {
-    employeeId: '',
-    employeeName: '',
-    employeePosition: '', 
-    date: new Date().toISOString().split('T')[0],
-    shift: '',
-    orderCount: '',
-  };
+  // Employee Level Shared Metadata Form State
+  const [employeeId, setEmployeeId] = useState('');
+  const [employeeName, setEmployeeName] = useState('');
+  const [employeePosition, setEmployeePosition] = useState('');
 
-  const [formData, setFormData] = useState(initialFormState);
+  // Dynamic Multi-Date Entries List State Row-Items
+  const [entries, setEntries] = useState<PerformanceEntry[]>([
+    { date: new Date().toISOString().split('T')[0], shift: '', order_count: '' }
+  ]);
 
   const positionOptions = [
     "zzz201", "zzz202", "zzz203", "zzz204", "zzz205", "zzz206", "zzz207", "zzz208", "zzz209", "zzz210", 
@@ -61,9 +66,8 @@ export function AddOrder() {
   const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
-  };
-
-  const hasFullAccess = ['Super Admin', 'Supervisors', 'TSP'].includes(userRole);
+  }, hasFullAccess = ['Super Admin', 'Supervisors', 'TSP'].includes(userRole);
+  
   const isLD = userRole === 'LD';
   const canModify = hasFullAccess || isLD;
   const canDelete = hasFullAccess;
@@ -93,22 +97,20 @@ export function AddOrder() {
   // Employee Auto-Lookup Engine
   useEffect(() => {
     const lookupEmployee = async () => {
-      if (formData.employeeId.trim().length < 3 || editingId) return;
+      if (employeeId.trim().length < 3 || editingId) return;
       
       setIsSearchingEmployee(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/orders/fetch-by-id/${formData.employeeId}`, {
+        const res = await fetch(`http://localhost:5000/api/orders/fetch-by-id/${employeeId}`, {
           headers: { 'x-user-role': userRole } 
         });
         const data = await res.json();
         if (data.success) {
-          setFormData(prev => ({
-            ...prev,
-            employeeName: data.name,
-            employeePosition: positionOptions.includes(data.designation) ? data.designation : ''
-          }));
+          setEmployeeName(data.name);
+          setEmployeePosition(positionOptions.includes(data.designation) ? data.designation : '');
         } else {
-          setFormData(prev => ({ ...prev, employeeName: 'EMPLOYEE NOT FOUND', employeePosition: '' }));
+          setEmployeeName('EMPLOYEE NOT FOUND');
+          setEmployeePosition('');
         }
       } catch (err) {
         console.error("Lookup failed", err);
@@ -119,12 +121,37 @@ export function AddOrder() {
 
     const timeoutId = setTimeout(lookupEmployee, 500);
     return () => clearTimeout(timeoutId);
-  }, [formData.employeeId, editingId, userRole]);
+  }, [employeeId, editingId, userRole]);
+
+  // Dynamic Array Handlers for managing multiple dates
+  const handleAddEntryRow = () => {
+    setEntries([
+      ...entries,
+      { date: new Date().toISOString().split('T')[0], shift: '', order_count: '' }
+    ]);
+  };
+
+  const handleRemoveEntryRow = (index: number) => {
+    if (entries.length === 1) return;
+    setEntries(entries.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateEntryField = (index: number, field: keyof PerformanceEntry, value: string) => {
+    const updatedEntries = [...entries];
+    updatedEntries[index] = {
+      ...updatedEntries[index],
+      [field]: value
+    };
+    setEntries(updatedEntries);
+  };
 
   const closeModal = () => {
     setShowModal(false);
     setEditingId(null);
-    setFormData(initialFormState);
+    setEmployeeId('');
+    setEmployeeName('');
+    setEmployeePosition('');
+    setEntries([{ date: new Date().toISOString().split('T')[0], shift: '', order_count: '' }]);
   };
 
   const handleDelete = async () => {
@@ -150,7 +177,7 @@ export function AddOrder() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.employeeName || formData.employeeName === 'EMPLOYEE NOT FOUND') {
+    if (!employeeName || employeeName === 'EMPLOYEE NOT FOUND') {
         return triggerToast("Please enter a valid Employee ID", 'error');
     }
 
@@ -159,17 +186,32 @@ export function AddOrder() {
       ? `http://localhost:5000/api/orders/${editingId}` 
       : 'http://localhost:5000/api/orders/add';
     
-    const payload = {
-      employee_id: formData.employeeId,
-      employee_name: formData.employeeName,
-      employee_position: formData.employeePosition,
-      project: "N/A", 
-      date: formData.date,
-      shift: formData.shift,
-      order_count: parseInt(formData.orderCount),
-      admin_id: savedUser.employee_id || 'Unknown',
-      admin_name: savedUser.name || 'System Admin'
-    };
+    // Construct request structural body parameters
+    const payload = editingId 
+      ? {
+          employee_id: employeeId,
+          employee_name: employeeName,
+          employee_position: employeePosition,
+          project: "N/A", 
+          date: entries[0].date,
+          shift: entries[0].shift,
+          order_count: parseInt(entries[0].order_count) || 0,
+          admin_id: savedUser.employee_id || 'Unknown',
+          admin_name: savedUser.name || 'System Admin'
+        }
+      : {
+          employee_id: employeeId,
+          employee_name: employeeName,
+          employee_position: employeePosition,
+          project: "N/A",
+          entries: entries.map(ent => ({
+            date: ent.date,
+            shift: ent.shift,
+            order_count: parseInt(ent.order_count) || 0
+          })),
+          admin_id: savedUser.employee_id || 'Unknown',
+          admin_name: savedUser.name || 'System Admin'
+        };
 
     try {
       const response = await fetch(endpoint, {
@@ -179,7 +221,7 @@ export function AddOrder() {
       });
       const data = await response.json();
       if (data.success) {
-        triggerToast(editingId ? "Ledger updated successfully" : "Performance record saved successfully");
+        triggerToast(editingId ? "Ledger updated successfully" : "Performance records saved successfully");
         closeModal();
         fetchOrders();
       } else {
@@ -254,7 +296,6 @@ export function AddOrder() {
                     <div className="font-bold text-gray-900">{order.employee_name}</div>
                     <div className="text-[10px] font-black text-blue-600 bg-blue-50 w-fit px-1.5 rounded border border-blue-100 mt-0.5">{order.employee_id}</div>
                   </td>
-                  {/* ✅ FIXED: Wrapped order.date in formatDateString to hide raw database timestamps */}
                   <td className="px-6 py-4 text-sm font-medium text-gray-700">{formatDateString(order.date)} <div className="text-gray-400 text-[10px] font-bold uppercase">{order.shift}</div></td>
                   <td className="px-6 py-4 font-mono text-xs text-gray-600">{order.employee_position}</td>
                   <td className="px-6 py-4 text-center"><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-black text-sm">{order.order_count}</span></td>
@@ -263,15 +304,14 @@ export function AddOrder() {
                       {canModify && (
                         <button onClick={() => { 
                           setEditingId(order.id); 
-                          setFormData({ 
-                            employeeId: order.employee_id, 
-                            employeeName: order.employee_name, 
-                            employeePosition: order.employee_position, 
-                            // ✅ FIXED: Safely scrub dynamic string timestamps so HTML5 calendar binds perfectly
-                            date: formatDateString(order.date), 
-                            shift: order.shift, 
-                            orderCount: order.order_count.toString() 
-                          }); 
+                          setEmployeeId(order.employee_id);
+                          setEmployeeName(order.employee_name);
+                          setEmployeePosition(order.employee_position);
+                          setEntries([{
+                            date: formatDateString(order.date),
+                            shift: order.shift,
+                            order_count: order.order_count.toString()
+                          }]);
                           setShowModal(true); 
                         }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
                       )}
@@ -309,8 +349,8 @@ export function AddOrder() {
       {/* FORM MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
-            <div className="bg-red-600 px-8 py-6 text-white flex justify-between items-center">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+            <div className="bg-red-600 px-8 py-6 text-white flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-xl font-black italic uppercase tracking-tighter">{editingId ? 'Edit Ledger' : 'New Performance'}</h2>
                 <p className="text-red-100 text-[10px] font-medium mt-1 uppercase tracking-widest">Verify all details before saving.</p>
@@ -318,53 +358,77 @@ export function AddOrder() {
               <button onClick={closeModal} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors"><X className="w-5 h-5"/></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto flex-1">
+              {/* Profile Meta Frame Block Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-4 border-b border-gray-100">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Employee ID *</label>
-                  <input required disabled={!!editingId} placeholder="E.g. EMP001" className={`w-full border-b-2 p-3 outline-none font-bold uppercase ${editingId ? 'bg-gray-50 text-gray-400 border-gray-100' : 'border-gray-100 focus:border-red-500'}`} value={formData.employeeId} onChange={(e) => setFormData({...formData, employeeId: e.target.value.toUpperCase()})} />
+                  <input required disabled={!!editingId} placeholder="E.g. EMP001" className={`w-full border-b-2 p-3 outline-none font-bold uppercase ${editingId ? 'bg-gray-50 text-gray-400 border-gray-100' : 'border-gray-100 focus:border-red-500'}`} value={employeeId} onChange={(e) => setEmployeeId(e.target.value.toUpperCase())} />
                   {isSearchingEmployee && <div className="text-[10px] text-blue-500 mt-1 flex items-center gap-1 font-bold animate-pulse"><Loader2 className="w-3 h-3 animate-spin" /> VERIFYING...</div>}
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Verified Name</label>
-                  <input readOnly className="w-full border-b-2 border-gray-50 p-3 bg-gray-50 text-gray-400 font-bold italic" value={formData.employeeName || 'Auto-filled...'} />
+                  <input readOnly className="w-full border-b-2 border-gray-50 p-3 bg-gray-50 text-gray-400 font-bold italic" value={employeeName || 'Auto-filled...'} />
                 </div>
-                
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Position Code *</label>
-                  <select required className="w-full border-b-2 border-gray-100 p-3 outline-none focus:border-red-500 bg-transparent font-medium" value={formData.employeePosition} onChange={(e) => setFormData({...formData, employeePosition: e.target.value})}>
+                  <select required className="w-full border-b-2 border-gray-100 p-3 outline-none focus:border-red-500 bg-transparent font-medium" value={employeePosition} onChange={(e) => setEmployeePosition(e.target.value)}>
                     <option value="">Select Code</option>
                     {positionOptions.map(pos => <option key={pos} value={pos}>{pos}</option>)}
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Shift *</label>
-                  <select required className="w-full border-b-2 border-gray-100 p-3 outline-none focus:border-red-500 bg-transparent font-medium" value={formData.shift} onChange={(e) => setFormData({...formData, shift: e.target.value})}>
-                    <option value="">Select Shift</option>
-                    <option value="Morning">Morning</option>
-                    <option value="Afternoon">Afternoon</option>
-                    <option value="Night">Night</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Entry Date *</label>
-                  <input type="date" required className="w-full border-b-2 border-gray-100 p-3 outline-none focus:border-red-500 font-medium" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Order Count *</label>
-                  <input type="number" required placeholder="0" className="w-full border-b-2 border-gray-100 p-3 text-2xl font-black text-red-600 focus:border-red-500 outline-none" value={formData.orderCount} onChange={(e) => setFormData({...formData, orderCount: e.target.value})} />
-                </div>
               </div>
 
-              <div className="flex gap-4 pt-4">
+              {/* Dynamic Array Entries Control Area */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">Performance Logging Rows</h3>
+                  {!editingId && (
+                    <button type="button" onClick={handleAddEntryRow} className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Add Another Date
+                    </button>
+                  )}
+                </div>
+
+                {entries.map((entry, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-gray-50/50 p-4 rounded-2xl border border-gray-100 relative group/row">
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Entry Date *</label>
+                      <input type="date" required className="w-full bg-white border border-gray-200 rounded-xl p-2.5 outline-none focus:border-red-500 font-medium text-sm" value={entry.date} onChange={(e) => handleUpdateEntryField(index, 'date', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Shift *</label>
+                      <select required className="w-full bg-white border border-gray-200 rounded-xl p-2.5 outline-none focus:border-red-500 font-medium text-sm" value={entry.shift} onChange={(e) => handleUpdateEntryField(index, 'shift', e.target.value)}>
+                        <option value="">Select Shift</option>
+                        <option value="Morning">Morning</option>
+                        <option value="Afternoon">Afternoon</option>
+                        <option value="Night">Night</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Order Count *</label>
+                        <input type="number" required placeholder="0" className="w-full bg-white border border-gray-200 rounded-xl p-2 font-black text-red-600 focus:border-red-500 outline-none text-base" value={entry.order_count} onChange={(e) => handleUpdateEntryField(index, 'order_count', e.target.value)} />
+                      </div>
+                      
+                      {!editingId && entries.length > 1 && (
+                        <button type="button" onClick={() => handleRemoveEntryRow(index)} className="p-2.5 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-colors mb-0.5">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4 pt-4 shrink-0 bg-white sticky bottom-0">
                 <button type="button" onClick={closeModal} className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors">Discard</button>
                 <button 
                   type="submit" 
-                  disabled={!formData.employeeName || formData.employeeName === 'EMPLOYEE NOT FOUND'} 
-                  className={`flex-1 py-4 rounded-2xl font-black text-white transition-all shadow-xl ${(!formData.employeeName || formData.employeeName === 'EMPLOYEE NOT FOUND') ? 'bg-gray-200' : 'bg-gray-900 hover:bg-black active:scale-95'}`}
+                  disabled={!employeeName || employeeName === 'EMPLOYEE NOT FOUND'} 
+                  className={`flex-1 py-4 rounded-2xl font-black text-white transition-all shadow-xl ${(!employeeName || employeeName === 'EMPLOYEE NOT FOUND') ? 'bg-gray-200' : 'bg-gray-900 hover:bg-black active:scale-95'}`}
                 >
                   {editingId ? 'UPDATE RECORD' : 'CONFIRM & SAVE'}
                 </button>

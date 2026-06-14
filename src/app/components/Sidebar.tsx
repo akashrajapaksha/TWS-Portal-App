@@ -52,6 +52,7 @@ export function Sidebar({
   
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['performance']);
+  const [imageError, setImageError] = useState(false); // ✅ Track state if the static file fails to load
 
   // --- ROLE LOGIC ---
   const userRole = employeeDesignation?.toUpperCase().trim();
@@ -143,6 +144,17 @@ export function Sidebar({
     }
   };
 
+  // 🛠️ HELPER: Formats file paths to point to your backend Express static upload server port
+  const getImageUrl = (src: string) => {
+    if (!src) return '';
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
+      return src; // Already a full URL path or base64 format string
+    }
+    // Change 5000 to your backend running Port layout configuration if different!
+    const backendBaseUrl = 'http://localhost:5000'; 
+    return src.startsWith('/') ? `${backendBaseUrl}${src}` : `${backendBaseUrl}/${src}`;
+  };
+
   return (
     <>
       <aside className={`w-[280px] bg-white border-r border-gray-200 flex flex-col h-screen transition-all duration-300 ${isCollapsed ? 'hidden' : 'block'}`}>
@@ -150,20 +162,21 @@ export function Sidebar({
         <div className="p-6">
           <div className="bg-gray-100 rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-200/50">
             
-            {/* ✅ FIXED AVATAR WRAPPER WITH STRICT BOUNDS AND LAYOUT CLIPPING */}
+            {/* ✅ UPDATED USER CONTAINER COMPONENT VIEW */}
             <div className="w-12 h-12 bg-indigo-600 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow-inner overflow-hidden relative">
-              {profileImage ? (
+              {profileImage && !imageError ? (
                 <img 
-                  src={profileImage} 
+                  src={getImageUrl(profileImage)} 
                   alt={employeeName} 
-                  className="w-full h-full object-cover object-center absolute inset-0 block layout-contain"
-                  onError={(e) => {
-                    // Graceful fallback to UI text representation if base64 breaks
-                    e.currentTarget.style.display = 'none';
+                  className="w-full h-full object-cover object-center absolute inset-0 block"
+                  onError={() => {
+                    setImageError(true); // Falls back seamlessly if directory reference path breaks
                   }}
                 />
               ) : (
-                <span className="italic">{employeeInitials || <Users className="w-5 h-5" />}</span>
+                <span className="uppercase font-semibold tracking-wider">
+                  {employeeInitials || employeeName.substring(0, 2)}
+                </span>
               )}
             </div>
 

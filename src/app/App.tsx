@@ -62,7 +62,7 @@ interface UserData {
   role: string;          
   initials: string;
   employee_id: string;
-  profile_image?: string; // ✅ ADDED: Capture profile image string from local state initialization
+  profile_image?: string; 
 }
 
 export default function App() {
@@ -83,7 +83,7 @@ export default function App() {
           role: parsed.role,
           initials: parsed.initials,
           employee_id: parsed.employee_id,
-          profile_image: parsed.profile_image // ✅ ADDED: Track field value from session caching layers
+          profile_image: parsed.profile_image 
         };
       } catch (err) {
         console.error("Session parse error", err);
@@ -96,6 +96,28 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!userData);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth < 768);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    const syncSessionStorage = () => {
+      const saved = sessionStorage.getItem('tws_user') || localStorage.getItem('tws_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setUserData(prev => {
+            if (prev?.profile_image !== parsed.profile_image || prev?.name !== parsed.name) {
+              return { ...prev, ...parsed };
+            }
+            return prev;
+          });
+        } catch (e) {
+          console.error("Context sync exception execution trace rejected", e);
+        }
+      }
+    };
+
+    window.addEventListener('storage', syncSessionStorage);
+    return () => window.removeEventListener('storage', syncSessionStorage);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -129,7 +151,7 @@ export default function App() {
         role: parsedUser.role,
         initials: parsedUser.initials,
         employee_id: parsedUser.employee_id,
-        profile_image: parsedUser.profile_image // ✅ ADDED: Ensure incoming field parsing is cleanly captured upon successful authentication
+        profile_image: parsedUser.profile_image 
       });
       setIsAuthenticated(true);
       setActiveMenuItem('dashboard');
@@ -164,12 +186,13 @@ export default function App() {
     const isLogPage = ['login-logs', 'leave-logs', 'other-logs', 'analyzing'].includes(activeMenuItem);
     const hasLogAccess = ['Super Admin', 'ER'].includes(role);
 
+    // ✅ Cleaned up: employeeInitials removed to fix type matching errors
     if (isLogPage && !hasLogAccess) {
-      return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} employeeInitials={userData?.initials} userRole={role} />;
+      return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} userRole={role} />;
     }
 
     switch (activeMenuItem) {
-      case 'dashboard': return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} employeeInitials={userData?.initials} userRole={role} />;
+      case 'dashboard': return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} userRole={role} />;
       case 'departments': return <Departments />;
       case 'projects': return <Projects />;
       case 'employees': return <Employees />;
@@ -243,7 +266,7 @@ export default function App() {
 
         <div className={`
           fixed md:relative z-40 h-full transition-all duration-300 ease-in-out
-          ${isSidebarCollapsed ? '-translate-x-full md:translate-x-0 md:w-20' : 'translate-x-0 w-[280px]'}
+          ${isSidebarCollapsed ? '-translate-x-full md:translate-x-0 md:w-0' : 'translate-x-0 w-[280px]'}
         `}>
           <Sidebar 
             activeItem={activeMenuItem} 
@@ -253,7 +276,7 @@ export default function App() {
             employeeName={userData?.name}
             employeeDesignation={userData?.role} 
             employeeInitials={userData?.initials}
-            profileImage={userData?.profile_image} // ✅ ADDED: Pass down profile_image state value directly into the Sidebar prop
+            profileImage={userData?.profile_image} 
           />
         </div>
         

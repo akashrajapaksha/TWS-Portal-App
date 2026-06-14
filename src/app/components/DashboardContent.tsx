@@ -5,6 +5,8 @@ import {
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:5000/api';
+// ✅ ADDED: Define server base path to resolve profile image URL addresses correctly
+const SERVER_BASE_URL = 'http://localhost:5000';
 
 interface LeaveRecord {
   id: string;
@@ -48,6 +50,18 @@ export function DashboardContent({
   
   const [loading, setLoading] = useState(true);
   const [lankaTimeStr, setLankaTimeStr] = useState('');
+
+  // ✅ ADDED: Image URL string parsing path normalizer helper function
+  const getProfileImageUrl = (imagePath: string | null | undefined) => {
+    if (!imagePath) return '';
+    // If the path is already a fully qualified HTTP URL link reference directly, return it
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    // Clean trailing or leading slashes and append local backend static uploads pathway context
+    const cleanPath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+    return `${SERVER_BASE_URL}/${cleanPath}`;
+  };
 
   // Real-time clock synchronization engine formatted to Asia/Colombo
   useEffect(() => {
@@ -192,8 +206,17 @@ export function DashboardContent({
               <div className="my-1 flex flex-col gap-1">
                 <div className="flex items-center gap-3">
                   <div className="h-11 w-11 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0 flex items-center justify-center">
+                    {/* ✅ FIXED: Wrapped profilePhoto source parameter with getProfileImageUrl() modifier engine */}
                     {stats.topPerformer.profilePhoto ? (
-                      <img src={stats.topPerformer.profilePhoto} alt={stats.topPerformer.name} className="h-full w-full object-cover" />
+                      <img 
+                        src={getProfileImageUrl(stats.topPerformer.profilePhoto)} 
+                        alt={stats.topPerformer.name} 
+                        className="h-full w-full object-cover" 
+                        onError={(e) => {
+                          // Fallback to text initials if rendering encounters a system execution crash
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                        }}
+                      />
                     ) : (
                       <span className="text-xs font-black text-slate-400 uppercase">{stats.topPerformer.name.slice(0, 2)}</span>
                     )}

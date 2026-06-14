@@ -3,7 +3,7 @@ import { Plus, X, Check, Calendar, BarChart3, Loader2, Clock, ShieldCheck, Alert
 
 // --- Types ---
 interface LeaveApplication {
-  id: number; // Updated from string to number to cleanly align with MySQL INT AUTO_INCREMENT
+  id: number; 
   employee_id: string;
   employee_name: string;
   leave_type: string;
@@ -46,44 +46,49 @@ export function Leaves() {
   };
 
   const [formData, setFormData] = useState({
-    leaveType: 'Medical', 
+    leaveType: 'Annual', // Changed default to 'Annual' to instantly trigger balance validations
     fromDate: '',
     toDate: '',
     totalDays: 0,
     reason: '',
   });
 
-  const availableLeaveTypes = useMemo(() => {
-    const types = [];
-    if (leaveBalance.annual > 0) types.push('Annual');
-    if (leaveBalance.casual > 0) types.push('Casual');
-    types.push('Medical');
-    types.push('No Pay');
-    return types;
-  }, [leaveBalance]);
+  // Static list of leave categories
+  const leaveOptions = ['Annual', 'Casual', 'Medical', 'No Pay'];
 
   const fetchData = useCallback(async (currentUser: any) => {
     setLoading(true);
     try {
-      const isPrivileged = ['SUPER ADMIN', 'ER', 'ADMIN', 'SUPERVISORS'].includes(currentUser.role?.trim().toUpperCase());
+      // 1. Isolate the target identifier using employee_id exclusively
+      const empId = currentUser?.employee_id;
+      const userRole = currentUser?.role || '';
+      
+      if (!empId) {
+        console.error("Critical System Interruption: employee_id is missing from local session data object.");
+        return;
+      }
+
+      const isPrivileged = ['SUPER ADMIN', 'ER', 'ADMIN', 'SUPERVISORS'].includes(userRole.trim().toUpperCase());
       setIsAdmin(isPrivileged);
 
-      const endpoint = isPrivileged ? '/all' : `/my-leaves/${currentUser.id}`;
+      // 2. Fetch Leaves Records History List
+      const endpoint = isPrivileged ? '/all' : `/my-leaves/${empId}`;
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: { 
-          'x-user-role': currentUser.role,
-          'x-employee-id': currentUser.id 
+          'x-user-role': userRole,
+          'x-employee-id': String(empId) 
         }
       });
       const data = await res.json();
-      if (data.success) setApplications(data.leaves);
+      if (data.success) setApplications(data.leaves || []);
 
-      const balanceRes = await fetch(`${API_BASE_URL}/balance/${currentUser.id}`);
+      // 3. Fetch Live Remaining Balances metrics (Aligned to employee_id sequence string)
+      const balanceRes = await fetch(`${API_BASE_URL}/balance/${empId}`);
       const balanceData = await balanceRes.json();
       if (balanceData.success) {
         setLeaveBalance({
-          annual: balanceData.annual,
-          casual: balanceData.casual
+          annual: Number(balanceData.annual ?? 0),
+          casual: Number(balanceData.casual ?? 0)
         });
       }
     } catch (error) {
@@ -103,12 +108,6 @@ export function Leaves() {
     }
   }, [fetchData]);
 
-  useEffect(() => {
-    if (!availableLeaveTypes.includes(formData.leaveType)) {
-      setFormData(prev => ({ ...prev, leaveType: availableLeaveTypes[0] || 'Medical' }));
-    }
-  }, [availableLeaveTypes, formData.leaveType]);
-
   const handleDateChange = (field: string, value: string) => {
     const newFormData = { ...formData, [field]: value };
     if (newFormData.fromDate && newFormData.toDate) {
@@ -124,21 +123,23 @@ export function Leaves() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const empId = user?.employee_id;
+
       const res = await fetch(`${API_BASE_URL}/apply`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-role': user.role 
+          'x-user-role': user?.role || '' 
         },
         body: JSON.stringify({
-          employee_id: user.id,
-          employee_name: user.name,
+          employee_id: empId, // Bound directly to operational code
+          employee_name: user?.name || '',
           leave_type: formData.leaveType,
           start_date: formData.fromDate,
           end_date: formData.toDate,
           number_of_days: formData.totalDays,
           reason: formData.reason,
-          user_id: user.id
+          user_id: user?.id || null // Keep standard user primary row key if needed for raw tracking references
         })
       });
       const data = await res.json();
@@ -146,7 +147,7 @@ export function Leaves() {
         setShowAddModal(false);
         fetchData(user);
         showToast("Application submitted successfully!");
-        setFormData({ leaveType: 'Medical', fromDate: '', toDate: '', totalDays: 0, reason: '' }); // Clean data state
+        setFormData({ leaveType: 'Annual', fromDate: '', toDate: '', totalDays: 0, reason: '' }); 
       } else {
         showToast(data.message, 'error');
       }
@@ -168,14 +169,14 @@ export function Leaves() {
             method: 'PATCH',
             headers: { 
               'Content-Type': 'application/json',
-              'x-user-role': user.role 
+              'x-user-role': user?.role || '' 
             },
             body: JSON.stringify({ 
               status, 
-              admin_id: user.id, 
-              admin_name: user.name, 
+              admin_id: user?.employee_id, // Aligned tracking trace to business identifiers
+              admin_name: user?.name || '', 
               leave_type: leaveType,
-              employee_id: user.id
+              employee_id: user?.employee_id
             })
           });
           const data = await res.json();
@@ -193,8 +194,12 @@ export function Leaves() {
     });
   };
 
-  const isBalanceExceeded = (formData.leaveType === 'Annual' && formData.totalDays > leaveBalance.annual) || 
-                            (formData.leaveType === 'Casual' && formData.totalDays > leaveBalance.casual);
+  const isBalanceExceeded = useMemo(() => {
+    const selectedType = formData.leaveType.trim().toUpperCase();
+    if (selectedType === 'ANNUAL' && formData.totalDays > leaveBalance.annual) return true;
+    if (selectedType === 'CASUAL' && formData.totalDays > leaveBalance.casual) return true;
+    return false;
+  }, [formData.leaveType, formData.totalDays, leaveBalance]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-screen bg-white">
@@ -251,7 +256,7 @@ export function Leaves() {
             <h1 className="text-4xl font-black italic tracking-tighter text-gray-900 uppercase">Leave Management</h1>
             <div className="flex items-center gap-2 mt-2">
               <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black rounded-md uppercase">{user?.role}</span>
-              <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">{user?.name}</p>
+              <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">{user?.name} ({user?.employee_id})</p>
             </div>
           </div>
           <button 
@@ -296,7 +301,10 @@ export function Leaves() {
               <tbody className="divide-y divide-gray-50">
                 {applications.map((app) => (
                   <tr key={app.id} className="hover:bg-blue-50/10 transition-colors">
-                    <td className="px-10 py-6 font-black text-gray-900 uppercase tracking-tighter text-lg">{app.employee_name}</td>
+                    <td className="px-10 py-6 font-black text-gray-900 uppercase tracking-tighter text-lg">
+                      {app.employee_name}
+                      <span className="block text-[10px] text-gray-400 font-bold tracking-normal mt-0.5">ID: {app.employee_id}</span>
+                    </td>
                     <td className="px-10 py-6">
                       <div className={`font-black uppercase tracking-tighter text-sm ${['Medical', 'No Pay'].includes(app.leave_type) ? 'text-red-500' : 'text-blue-600'}`}>{app.leave_type} Leave</div>
                       <div className="text-xs font-bold text-gray-400 italic">{app.number_of_days} Days ({new Date(app.start_date).toLocaleDateString()} - {new Date(app.end_date).toLocaleDateString()})</div>
@@ -344,19 +352,28 @@ export function Leaves() {
                   value={formData.leaveType} 
                   onChange={e => setFormData({...formData, leaveType: e.target.value})}
                 >
-                  {availableLeaveTypes.map(t => <option key={t} value={t}>{t} Leave</option>)}
+                  {leaveOptions.map(t => <option key={t} value={t}>{t} Leave</option>)}
                 </select>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="date" required className="p-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] font-bold focus:border-blue-600 outline-none" onChange={e => handleDateChange('fromDate', e.target.value)} />
-                <input type="date" required className="p-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] font-bold focus:border-blue-600 outline-none" onChange={e => handleDateChange('toDate', e.target.value)} />
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider ml-2">From Date</label>
+                  <input type="date" required value={formData.fromDate} className="p-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] font-bold focus:border-blue-600 outline-none w-full" onChange={e => handleDateChange('fromDate', e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider ml-2">To Date</label>
+                  <input type="date" required value={formData.toDate} className="p-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] font-bold focus:border-blue-600 outline-none w-full" onChange={e => handleDateChange('toDate', e.target.value)} />
+                </div>
               </div>
 
-              <textarea placeholder="Reason for leave..." required className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] h-28 font-medium focus:border-blue-600 outline-none resize-none" onChange={e => setFormData({...formData, reason: e.target.value})} />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Reason</label>
+                <textarea placeholder="Reason for leave..." required value={formData.reason} className="w-full p-5 bg-gray-50 border-2 border-transparent rounded-[1.5rem] h-28 font-medium focus:border-blue-600 outline-none resize-none" onChange={e => setFormData({...formData, reason: e.target.value})} />
+              </div>
 
               {isBalanceExceeded && (
-                <div className="bg-red-50 p-4 rounded-2xl flex items-center gap-3 border border-red-100 text-red-600">
+                <div className="bg-red-50 p-4 rounded-2xl flex items-center gap-3 border border-red-100 text-red-600 animate-pulse">
                   <AlertCircle size={20} />
                   <p className="text-[10px] font-black uppercase tracking-widest">Balance Exceeded! Choose Medical or No Pay.</p>
                 </div>
