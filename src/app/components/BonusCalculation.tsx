@@ -1,5 +1,5 @@
 import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
-import { Search, User, Briefcase, DollarSign, Loader2, Calendar, Target, ShieldAlert, Lock } from 'lucide-react';
+import { Search, User, Briefcase, DollarSign, Loader2, Calendar, Target, ShieldAlert, Lock, Clock } from 'lucide-react';
 
 interface BonusCalculationProps {
   employeeDesignation?: string; // Links directly to userData.role ("Super Admin", "Employees", etc.)
@@ -12,26 +12,39 @@ interface DailyBreakdownItem {
   mistakes: number;
   net: number;
   status: 'Active' | 'Excluded';
+  shiftType: string; // Tracks 'Morning' | 'Noon' | 'Night' records explicitly
+}
+
+interface NextTierInfo {
+  nextThreshold: number;
+  gapToNext: number;
+  potentialBonus: number;
+}
+
+interface ShiftMetricsSummary {
+  activeDays: number;
+  calculatedBonus: number;
+  metrics: {
+    totalOrders: number;
+    totalMistakes: number;
+    totalNet: number;
+    nextTierInfo: NextTierInfo | null;
+  };
 }
 
 interface BonusResult {
   employeeId: string;
   employeeName: string;
   project: string;
-  durationDays: number;
-  calculatedBonus: number;
-  metrics: {
-    totalOrders: number;
-    totalMistakes: number;
-    totalNet: number;
-    nextTierInfo: {
-      nextThreshold: number;
-      gapToNext: number;
-      potentialBonus: number;
-    } | null;
+  shifts: {
+    morning: ShiftMetricsSummary;
+    noon: ShiftMetricsSummary;
+    night: ShiftMetricsSummary;
   };
   dailyBreakdown: DailyBreakdownItem[];
 }
+
+type AllowedShiftTabs = 'morning' | 'noon' | 'night';
 
 export default function BonusCalculation({ 
   employeeDesignation = "Employees", 
@@ -54,17 +67,18 @@ export default function BonusCalculation({
     endDate: '2026-06-02',
   });
 
+  const [activeShiftTab, setActiveShiftTab] = useState<AllowedShiftTabs>('morning');
+  const [result, setResult] = useState<BonusResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [fetchingEmp, setFetchingEmp] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+
   // Structural sync hook if session variables render asynchronously
   useEffect(() => {
     if (!isManagement && currentEmployeeId) {
       setFormData(prev => ({ ...prev, employeeId: currentEmployeeId.trim().toUpperCase() }));
     }
   }, [currentEmployeeId, isManagement]);
-
-  const [result, setResult] = useState<BonusResult | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [fetchingEmp, setFetchingEmp] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
 
   const getUserAuthHeaders = () => {
     return {
@@ -150,6 +164,13 @@ export default function BonusCalculation({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper baseline value injector for fallback loading states
+  const currentViewMetrics = result?.shifts[activeShiftTab] || {
+    activeDays: 0,
+    calculatedBonus: 0,
+    metrics: { totalOrders: 0, totalMistakes: 0, totalNet: 0, nextTierInfo: null }
   };
 
   return (
@@ -270,10 +291,11 @@ export default function BonusCalculation({
           )}
         </div>
 
-        {/* Presentation Core Summary Output */}
-        <div className="bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center min-h-[220px]">
+        {/* Presentation Core Summary Output (Shift-Aware Split View Layout) */}
+        <div className="bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center min-h-[260px]">
           {result ? (
-            <div className="w-full h-full flex flex-col justify-between space-y-6">
+            <div className="w-full h-full flex flex-col justify-between space-y-5">
+              
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
                   <h4 className="text-sm font-bold text-slate-800">{result.employeeName}</h4>
@@ -282,42 +304,72 @@ export default function BonusCalculation({
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Days</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Shift Volume</p>
                   <p className="text-xs font-bold text-slate-700 flex items-center gap-1 justify-end mt-0.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> {result.durationDays} Days
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> {currentViewMetrics.activeDays} Days
                   </p>
                 </div>
               </div>
 
+              {/* Score breakdown parameters box */}
               <div className="grid grid-cols-3 gap-2">
-                <div className="bg-[#f4f6f9] p-3 rounded-xl text-center">
+                <div className="bg-[#f4f6f9] p-2.5 rounded-xl text-center">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Orders</span>
-                  <span className="text-sm font-bold text-slate-700 block mt-0.5">{result.metrics.totalOrders}</span>
+                  <span className="text-xs font-bold text-slate-700 block mt-0.5">{currentViewMetrics.metrics.totalOrders}</span>
                 </div>
-                <div className="bg-[#f4f6f9] p-3 rounded-xl text-center">
+                <div className="bg-[#f4f6f9] p-2.5 rounded-xl text-center">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Mistakes</span>
-                  <span className="text-sm font-bold text-red-500 block mt-0.5">{result.metrics.totalMistakes}</span>
+                  <span className="text-xs font-bold text-red-500 block mt-0.5">{currentViewMetrics.metrics.totalMistakes}</span>
                 </div>
-                <div className="bg-[#f4f6f9] p-3 rounded-xl text-center">
+                <div className="bg-[#f4f6f9] p-2.5 rounded-xl text-center">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Net Score</span>
-                  <span className="text-sm font-bold text-indigo-600 block mt-0.5">{result.metrics.totalNet}</span>
+                  <span className="text-xs font-bold text-indigo-600 block mt-0.5">{currentViewMetrics.metrics.totalNet}</span>
                 </div>
               </div>
 
-              <div className="bg-emerald-50/60 border border-emerald-100/70 p-4 rounded-2xl flex items-center justify-between">
+              {/* Milestone Tracker Notification (Calculates target tier goals) */}
+              {currentViewMetrics.metrics.nextTierInfo && (
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" /> Next Milestone:
+                  </span>
+                  <span>
+                    Need <strong className="text-indigo-600 font-bold">{currentViewMetrics.metrics.nextTierInfo.gapToNext}</strong> net score to hit <strong className="text-slate-700 font-bold">${currentViewMetrics.metrics.nextTierInfo.potentialBonus}</strong>
+                  </span>
+                </div>
+              )}
+
+              {/* Combined Total Calculated Bonus row alongside interactive tab toggles */}
+              <div className="bg-emerald-50/60 border border-emerald-100/70 p-3.5 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="bg-emerald-500 text-white p-2 rounded-xl">
+                  <div className="bg-emerald-500 text-white p-2 rounded-xl shrink-0">
                     <DollarSign className="w-4 h-4" />
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-emerald-700/80 uppercase tracking-wider block">Calculated Bonus</span>
-                    <span className="text-xs text-emerald-600 font-medium">Unlocked Milestone</span>
+                    <span className="text-xl font-black text-emerald-600 block">${currentViewMetrics.calculatedBonus}</span>
                   </div>
                 </div>
-                <span className="text-2xl font-black text-emerald-600">
-                  ${result.calculatedBonus}
-                </span>
+
+                {/* Horizontal Switcher Box Layout for individual shifts */}
+                <div className="flex bg-slate-200/60 p-0.5 rounded-lg border border-slate-200 shrink-0">
+                  {(['morning', 'noon', 'night'] as AllowedShiftTabs[]).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setActiveShiftTab(tab)}
+                      className={`px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider rounded-md transition-all duration-150 ${
+                        activeShiftTab === tab
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
               </div>
+
             </div>
           ) : (
             <div className="text-center py-8 space-y-2">
@@ -340,7 +392,7 @@ export default function BonusCalculation({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-2">
           <div>
             <h3 className="text-sm font-bold text-slate-800">Operational Log Breakdown</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Day-by-day itemization of tracked data properties.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Day-by-day itemization of tracked shift allocation logs.</p>
           </div>
           {result && (
             <div className="bg-indigo-50 text-indigo-600 font-bold text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-lg self-start sm:self-auto">
@@ -354,7 +406,7 @@ export default function BonusCalculation({
             <thead>
               <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                 <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-center">Shift Window</th>
                 <th className="py-3 px-4 text-center">Order Count</th>
                 <th className="py-3 px-4 text-center">Mistakes Incidence</th>
                 <th className="py-3 px-4 text-right">Net Metric Score</th>
@@ -371,12 +423,14 @@ export default function BonusCalculation({
                   >
                     <td className="py-3.5 px-4 text-slate-600 font-medium">{day.date}</td>
                     <td className="py-3.5 px-4 text-center">
-                      <span className={`inline-block text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md font-bold ${
-                        day.status === 'Active' 
-                          ? 'bg-emerald-50 text-emerald-600' 
-                          : 'bg-amber-50 text-amber-600'
+                      <span className={`inline-block text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md font-bold border ${
+                        day.status === 'Excluded'
+                          ? 'bg-slate-100 text-slate-500 border-slate-200'
+                          : day.shiftType === 'Night' ? 'bg-purple-50 text-purple-600 border-purple-100'
+                          : day.shiftType === 'Noon' ? 'bg-amber-50 text-amber-600 border-amber-100'
+                          : 'bg-blue-50 text-blue-600 border-blue-100'
                       }`}>
-                        {day.status}
+                        {day.status === 'Excluded' ? 'Excluded' : day.shiftType}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-center text-slate-700">{day.orders}</td>
