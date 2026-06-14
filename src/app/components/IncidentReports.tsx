@@ -46,11 +46,18 @@ export function IncidentReports() {
   });
 
   const savedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
-  const userRole = savedUser.role || '';
+  const userRole = (savedUser.role || '').trim().toUpperCase();
   const loggedInEmployeeId = savedUser.employee_id || '';
 
-  const isEmployee = userRole === 'Employees';
-  const isAdmin = userRole === 'Admin';
+  // --- ROLE AND PERMISSION SCHEMES ---
+  const isEmployee = userRole === 'EMPLOYEES';
+  const isAdmin = userRole === 'ADMIN';
+  
+  // Explicit check for printing clearances
+  const canPrint = ['SUPER ADMIN', 'SUPERVISORS', 'ER', 'ADMIN', 'TPS'].includes(userRole);
+  
+  // Explicit check for management modification privileges
+  const isManagement = ['SUPER ADMIN', 'SUPERVISORS', 'ER', 'ADMIN', 'TPS'].includes(userRole);
 
   // State declaration handles amount safely as a string type to handle empty text fields seamlessly
   const [formData, setFormData] = useState({
@@ -69,11 +76,11 @@ export function IncidentReports() {
     try {
       const res = await fetch(`http://localhost:5000/api/ir?userRole=${userRole}&loggedInEmployeeId=${loggedInEmployeeId}&searchId=${searchId}`);
       const result = await res.json();
-      if (result.success) setReports(result.data);
+      if (result.success) setReports(result.data || []);
     } catch (err) {
       console.error("Fetch error:", err);
     } finally {
-      loading && setLoading(false);
+      setLoading(false);
     }
   }, [userRole, loggedInEmployeeId, searchId]);
 
@@ -138,6 +145,10 @@ export function IncidentReports() {
   };
 
   const handlePrint = (report: Report) => {
+    if (!canPrint) {
+      showToast("Access Denied: Your account role limits target layout generation.", "error");
+      return;
+    }
     const dataForPrint = {
       fullName: report.full_name, nickName: report.nick_name || '',
       position: report.position || '', details: report.incident_details,
@@ -159,7 +170,7 @@ export function IncidentReports() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          amount: parseFloat(formData.amount) || 0, // Fallback handles blank text inputs as 0 safely
+          amount: parseFloat(formData.amount) || 0, 
           adminId: loggedInEmployeeId, 
           adminName: savedUser.name, 
           userRole: userRole
@@ -259,9 +270,9 @@ export function IncidentReports() {
               </button>
               <button 
                 onClick={confirmModal.onConfirm} 
-                className={`flex-1 py-3 text-xs font-black uppercase text-white rounded-xl shadow-lg transition-all active:scale-95 ${
+                className="flex-1 py-3 text-xs font-black uppercase text-white rounded-xl shadow-lg transition-all active:scale-95 ${
                   confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'
-                }`}
+                }"
               >
                 Confirm
               </button>
@@ -279,7 +290,7 @@ export function IncidentReports() {
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Formal Warning & Disciplinary Tracking</p>
           </div>
         </div>
-        {!isEmployee && !isAdmin && (
+        {isManagement && (
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs uppercase shadow-lg shadow-blue-100 transition-all active:scale-95">
             <Plus className="w-4 h-4" /> New Manual Entry
           </button>
@@ -314,7 +325,7 @@ export function IncidentReports() {
                 <th className="px-6 py-4">Incident Details</th>
                 <th className="px-6 py-4 text-center">Severity/Count</th>
                 <th className="px-6 py-4 text-center">Current Status</th>
-                {!isAdmin && <th className="px-6 py-4 text-right">Control</th>}
+                {(canPrint || isManagement) && <th className="px-6 py-4 text-right">Control</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -349,24 +360,28 @@ export function IncidentReports() {
                         {report.status === 'pending' ? (isCritical ? 'Critical Limit' : 'Monitoring') : 'IR Issued'}
                       </span>
                     </td>
-                    {!isAdmin && (
+                    {(canPrint || isManagement) && (
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
                           {report.status === 'pending' ? (
                             isCritical ? (
-                              <button 
-                                onClick={() => handlePromote(report)} 
-                                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase hover:bg-red-700 transition-all shadow-md shadow-red-100 active:scale-95"
-                              >
-                                <AlertTriangle className="w-3.5 h-3.5" /> Issue IR
-                              </button>
+                              isManagement && (
+                                <button 
+                                  onClick={() => handlePromote(report)} 
+                                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase hover:bg-red-700 transition-all shadow-md shadow-red-100 active:scale-95"
+                                >
+                                  <AlertTriangle className="w-3.5 h-3.5" /> Issue IR
+                                </button>
+                              )
                             ) : (
                               <span className="text-[9px] font-black text-gray-400 uppercase italic px-4 py-2">Monitoring</span>
                             )
                           ) : (
                             <>
-                              <button onClick={() => handlePrint(report)} title="Print IR" className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer className="w-4 h-4" /></button>
-                              {!isEmployee && (
+                              {canPrint && (
+                                <button onClick={() => handlePrint(report)} title="Print IR" className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Printer className="w-4 h-4" /></button>
+                              )}
+                              {isManagement && !isEmployee && userRole !== 'LD' && (
                                 <button onClick={() => handleDelete(report.id, report.status)} title="Delete Record" className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
                               )}
                             </>
@@ -430,7 +445,6 @@ export function IncidentReports() {
                 <textarea rows={2} required className="w-full p-3.5 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-sm outline-none resize-none" value={formData.details} onChange={(e) => setFormData({...formData, details: e.target.value})} />
               </div>
 
-              {/* Added explicit form text field block for general Description input required by back-end schema */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Incident Description Summary</label>
                 <textarea rows={2} className="w-full p-3.5 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold text-sm outline-none resize-none" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
