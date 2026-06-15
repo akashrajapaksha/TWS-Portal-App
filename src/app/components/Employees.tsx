@@ -10,6 +10,7 @@ const DESIGNATIONS = [
   'Data Entry Associates',
   'IT Support Executives',
   'ER',
+  'ER-Specialist',
   'Admin Assistant'
 ];
 

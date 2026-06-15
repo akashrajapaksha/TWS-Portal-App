@@ -13,6 +13,7 @@ interface LeaveApplication {
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   apply_date: string;
+  reject_reason?: string; // 🌟 Added field for tracking administrative rejections
 }
 
 const API_BASE_URL = 'http://localhost:5000/api/leaves';
@@ -46,7 +47,7 @@ export function Leaves() {
   };
 
   const [formData, setFormData] = useState({
-    leaveType: 'Annual', // Changed default to 'Annual' to instantly trigger balance validations
+    leaveType: 'Annual', 
     fromDate: '',
     toDate: '',
     totalDays: 0,
@@ -59,7 +60,6 @@ export function Leaves() {
   const fetchData = useCallback(async (currentUser: any) => {
     setLoading(true);
     try {
-      // 1. Isolate the target identifier using employee_id exclusively
       const empId = currentUser?.employee_id;
       const userRole = currentUser?.role || '';
       
@@ -71,18 +71,18 @@ export function Leaves() {
       const isPrivileged = ['SUPER ADMIN', 'ER', 'ADMIN', 'SUPERVISORS'].includes(userRole.trim().toUpperCase());
       setIsAdmin(isPrivileged);
 
-      // 2. Fetch Leaves Records History List
+      // Fetch Leaves Records History List
       const endpoint = isPrivileged ? '/all' : `/my-leaves/${empId}`;
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: { 
-          'x-user-role': userRole,
+          'X-User-Role': userRole,
           'x-employee-id': String(empId) 
         }
       });
       const data = await res.json();
       if (data.success) setApplications(data.leaves || []);
 
-      // 3. Fetch Live Remaining Balances metrics (Aligned to employee_id sequence string)
+      // Fetch Live Remaining Balances metrics
       const balanceRes = await fetch(`${API_BASE_URL}/balance/${empId}`);
       const balanceData = await balanceRes.json();
       if (balanceData.success) {
@@ -129,17 +129,17 @@ export function Leaves() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-role': user?.role || '' 
+          'X-User-Role': user?.role || '' 
         },
         body: JSON.stringify({
-          employee_id: empId, // Bound directly to operational code
+          employee_id: empId, 
           employee_name: user?.name || '',
           leave_type: formData.leaveType,
           start_date: formData.fromDate,
           end_date: formData.toDate,
           number_of_days: formData.totalDays,
           reason: formData.reason,
-          user_id: user?.id || null // Keep standard user primary row key if needed for raw tracking references
+          user_id: user?.id || null 
         })
       });
       const data = await res.json();
@@ -159,24 +159,39 @@ export function Leaves() {
   };
 
   const updateStatus = (id: number, status: string, leaveType: string) => {
+    let trackingComment = '';
+
+    // 🌟 Check if action is a rejection, request administrative comment reason string
+    if (status === 'Rejected') {
+      const inputPrompt = prompt("Enter a reason for rejecting this leave request:");
+      if (inputPrompt === null) return; // Cancel out gracefully if modal dismissed
+      if (!inputPrompt.trim()) {
+        showToast("You must provide a rejection reason.", "error");
+        return;
+      }
+      trackingComment = inputPrompt.trim();
+    }
+
     setConfirmModal({
       isOpen: true,
       title: `${status} Application`,
-      message: `Are you sure you want to ${status.toLowerCase()} this leave request? This action cannot be undone.`,
+      message: status === 'Rejected'
+        ? `Are you sure you want to reject this request with comment: "${trackingComment}"?`
+        : `Are you sure you want to approve this leave request? This action cannot be undone.`,
       onConfirm: async () => {
         try {
           const res = await fetch(`${API_BASE_URL}/approve/${id}`, {
             method: 'PATCH',
             headers: { 
               'Content-Type': 'application/json',
-              'x-user-role': user?.role || '' 
+              'X-User-Role': user?.role || '' 
             },
             body: JSON.stringify({ 
-              status, 
-              admin_id: user?.employee_id, // Aligned tracking trace to business identifiers
+              status: status, 
+              admin_id: String(user?.employee_id || '').trim(), 
               admin_name: user?.name || '', 
-              leave_type: leaveType,
-              employee_id: user?.employee_id
+              leave_type: leaveType.trim(),
+              reject_reason: trackingComment // 🌟 Send reason text downstream inside the request body
             })
           });
           const data = await res.json();
@@ -308,6 +323,14 @@ export function Leaves() {
                     <td className="px-10 py-6">
                       <div className={`font-black uppercase tracking-tighter text-sm ${['Medical', 'No Pay'].includes(app.leave_type) ? 'text-red-500' : 'text-blue-600'}`}>{app.leave_type} Leave</div>
                       <div className="text-xs font-bold text-gray-400 italic">{app.number_of_days} Days ({new Date(app.start_date).toLocaleDateString()} - {new Date(app.end_date).toLocaleDateString()})</div>
+                      
+                      {/* 🌟 Condition rendering the rejection response text trace blocks directly */}
+                      {app.status === 'Rejected' && app.reject_reason && (
+                        <div className="mt-3 p-3 bg-red-50/80 rounded-xl border border-red-100 max-w-xs animate-in fade-in duration-300">
+                          <p className="text-[9px] font-black uppercase text-red-500 tracking-wider mb-0.5">Comment:</p>
+                          <p className="text-xs font-semibold text-red-700 italic">"{app.reject_reason}"</p>
+                        </div>
+                      )}
                     </td>
                     <td className="px-10 py-6 text-center">
                       <span className={`px-5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border-2 ${
