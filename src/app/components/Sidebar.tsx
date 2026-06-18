@@ -22,7 +22,7 @@ interface SidebarProps {
   employeeName?: string;
   employeeDesignation?: string; 
   employeeInitials?: string;
-  profileImage?: string; // ✅ Receives base64 image string or file path from DB
+  profileImage?: string;
 }
 
 interface SubMenuItem {
@@ -47,23 +47,27 @@ export function Sidebar({
   employeeName = "Admin TWS",
   employeeDesignation = "Employees", 
   employeeInitials = "",
-  profileImage = "" // ✅ Destructured default assignment
+  profileImage = ""
 }: SidebarProps) {
   
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['performance']);
-  const [imageError, setImageError] = useState(false); // ✅ Track state if the static file fails to load
+  const [imageError, setImageError] = useState(false);
 
-  // --- ROLE LOGIC ---
-  const userRole = employeeDesignation?.toUpperCase().trim();
+  // --- 🛠️ ROBUST ROLE LOGIC ---
+  const userRole = employeeDesignation?.toUpperCase().trim() || '';
   
   const isSuperAdmin = userRole === 'SUPER ADMIN';
   const isSupervisor = userRole === 'SUPERVISORS'; 
   const isLD = userRole === 'LD';
   
+  // Checking for both TSP and TPS variations to guarantee match safety
+  const isTSPUser = userRole === 'TSP' || userRole === 'TPS';
+  
+  // Expanded authority mapping to give TSP full access
   const isAuthority = [
-    'SUPER ADMIN', 'ADMIN', 'SUPERVISORS', 'ER', 'TSP', 'LD'
-  ].includes(userRole || '');
+    'SUPER ADMIN', 'ADMIN', 'SUPERVISORS', 'ER', 'TSP', 'TPS', 'LD'
+  ].includes(userRole);
 
   const canSeeOrganization = isAuthority && !isSupervisor && !isLD;
   const canAccessLogs = isSuperAdmin;
@@ -89,10 +93,10 @@ export function Sidebar({
       label: 'Performance',
       visible: true, 
       subItems: [
-        { id: 'add-order', label: 'Add Order', visible: isAuthority }, 
-        { id: 'add-mistakes', label: 'Add Mistakes', visible: isAuthority }, 
+        { id: 'add-order', label: 'Add Order', visible: isAuthority || isTSPUser }, 
+        { id: 'add-mistakes', label: 'Add Mistakes', visible: isAuthority || isTSPUser }, 
         { id: 'bonus-calculation', label: 'Bonus Calculation', visible: true }, 
-        { id: 'reports', label: 'Reports', visible: isAuthority }, 
+        { id: 'reports', label: 'Reports', visible: isAuthority || isTSPUser }, 
         { id: 'ir', label: 'IR (Incident Report)', visible: true }, 
         { id: 'warning-letter', label: 'Warning Letter', visible: true }, 
       ]
@@ -144,14 +148,12 @@ export function Sidebar({
     }
   };
 
-  // 🛠️ HELPER: Formats file paths to point to your backend Express static upload server port
   const getImageUrl = (src: string) => {
     if (!src) return '';
     if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
-      return src; // Already a full URL path or base64 format string
+      return src;
     }
-    // Change 5000 to your backend running Port layout configuration if different!
-    const backendBaseUrl = 'http://localhost:5000'; 
+    const backendBaseUrl = 'https://ambassador-michigan-mandate-penalty.trycloudflare.com'; 
     return src.startsWith('/') ? `${backendBaseUrl}${src}` : `${backendBaseUrl}/${src}`;
   };
 
@@ -162,16 +164,13 @@ export function Sidebar({
         <div className="p-6">
           <div className="bg-gray-100 rounded-xl p-4 flex items-center gap-3 shadow-sm border border-gray-200/50">
             
-            {/* ✅ UPDATED USER CONTAINER COMPONENT VIEW */}
             <div className="w-12 h-12 bg-indigo-600 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg shadow-inner overflow-hidden relative">
               {profileImage && !imageError ? (
                 <img 
                   src={getImageUrl(profileImage)} 
                   alt={employeeName} 
                   className="w-full h-full object-cover object-center absolute inset-0 block"
-                  onError={() => {
-                    setImageError(true); // Falls back seamlessly if directory reference path breaks
-                  }}
+                  onError={() => setImageError(true)}
                 />
               ) : (
                 <span className="uppercase font-semibold tracking-wider">

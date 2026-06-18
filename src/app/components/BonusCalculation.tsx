@@ -2,7 +2,7 @@ import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Search, User, Briefcase, DollarSign, Loader2, Calendar, Target, ShieldAlert, Lock, Clock } from 'lucide-react';
 
 interface BonusCalculationProps {
-  employeeDesignation?: string; // Links directly to userData.role ("Super Admin", "Employees", etc.)
+  employeeDesignation?: string; // Links directly to userData.role
   currentEmployeeId?: string;    // Links directly to userData.employee_id
 }
 
@@ -12,7 +12,7 @@ interface DailyBreakdownItem {
   mistakes: number;
   net: number;
   status: 'Active' | 'Excluded';
-  shiftType: string; // Tracks 'Morning' | 'Noon' | 'Night' records explicitly
+  shiftType: string; // 'Morning' | 'Noon' | 'Night'
 }
 
 interface NextTierInfo {
@@ -54,9 +54,9 @@ export default function BonusCalculation({
   // --- PRIVILEGE VERIFICATION MECHANISM ---
   const userRole = (employeeDesignation || '').trim();
   
-  // Matches management definitions used within your core system rules
+  // Included 'TPS' into management scope for global operational overrides
   const isManagement = [
-    'Super Admin', 'Admin', 'Supervisors', 'ER', 'TSP', 'LD'
+    'Super Admin', 'Admin', 'Supervisors', 'ER', 'TPS', 'LD'
   ].includes(userRole);
 
   const [formData, setFormData] = useState({
@@ -73,7 +73,7 @@ export default function BonusCalculation({
   const [fetchingEmp, setFetchingEmp] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
-  // Structural sync hook if session variables render asynchronously
+  // Structural sync hook for non-management visibility loops
   useEffect(() => {
     if (!isManagement && currentEmployeeId) {
       setFormData(prev => ({ ...prev, employeeId: currentEmployeeId.trim().toUpperCase() }));
@@ -88,7 +88,7 @@ export default function BonusCalculation({
     };
   };
 
-  // Debounced identity checker for administrative searches
+  // Debounced identity checker for administrative processing
   useEffect(() => {
     if (!formData.employeeId.trim()) {
       setFormData(prev => ({ ...prev, employeeName: '', project: '' }));
@@ -100,7 +100,7 @@ export default function BonusCalculation({
       setError('');
       try {
         const response = await fetch(
-          `http://localhost:5000/api/bonus/public-search/${formData.employeeId.trim()}`,
+          `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/bonus/public-search/${formData.employeeId.trim()}`,
           {
             method: 'GET',
             headers: getUserAuthHeaders()
@@ -130,7 +130,7 @@ export default function BonusCalculation({
   }, [formData.employeeId, userRole, currentEmployeeId]);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    // SECURITY WALL: Terminate input modifications immediately if an unauthorized profile attempts edits
+    // SECURITY WALL: Prevent changes if non-management updates ID parameter fields
     if (!isManagement && e.target.name === 'employeeId') return;
     
     const { name, value } = e.target;
@@ -143,14 +143,13 @@ export default function BonusCalculation({
     setError('');
     setResult(null);
 
-    // Overwrite runtime payload to completely enforce standard employee isolation constraints
     const baselinePayload = {
       ...formData,
       employeeId: isManagement ? formData.employeeId : (currentEmployeeId || '').trim().toUpperCase()
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/bonus/analyze', {
+      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/bonus/analyze', {
         method: 'POST',
         headers: getUserAuthHeaders(),
         body: JSON.stringify(baselinePayload),
@@ -166,7 +165,6 @@ export default function BonusCalculation({
     }
   };
 
-  // Helper baseline value injector for fallback loading states
   const currentViewMetrics = result?.shifts[activeShiftTab] || {
     activeDays: 0,
     calculatedBonus: 0,
@@ -176,11 +174,16 @@ export default function BonusCalculation({
   return (
     <div className="w-full min-h-screen bg-[#f8fafc] p-4 md:p-8 space-y-6 font-sans">
       
-      {/* Structural Notice Banner (Only loaded for basic access visibility states) */}
-      {!isManagement && (
+      {/* Privilege Status Tracker Banner */}
+      {!isManagement ? (
         <div className="w-full bg-indigo-50 border border-indigo-100/70 p-4 rounded-2xl flex items-center gap-2 text-indigo-700 text-xs font-semibold">
           <Lock className="w-4 h-4 text-indigo-500 shrink-0" />
           <span>Secure Mode: Access scope restricted exclusively to your logged employee identity (ID: {currentEmployeeId}).</span>
+        </div>
+      ) : (
+        <div className="w-full bg-emerald-50 border border-emerald-100/70 p-4 rounded-2xl flex items-center gap-2 text-emerald-700 text-xs font-semibold">
+          <ShieldAlert className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>Administrative Control Panel: System-wide search and operational override mode activated for role type: {userRole}.</span>
         </div>
       )}
 
@@ -291,7 +294,7 @@ export default function BonusCalculation({
           )}
         </div>
 
-        {/* Presentation Core Summary Output (Shift-Aware Split View Layout) */}
+        {/* Summary Presentation Display */}
         <div className="bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center min-h-[260px]">
           {result ? (
             <div className="w-full h-full flex flex-col justify-between space-y-5">
@@ -311,7 +314,7 @@ export default function BonusCalculation({
                 </div>
               </div>
 
-              {/* Score breakdown parameters box */}
+              {/* Score parameter boxes */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-[#f4f6f9] p-2.5 rounded-xl text-center">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Orders</span>
@@ -327,7 +330,7 @@ export default function BonusCalculation({
                 </div>
               </div>
 
-              {/* Milestone Tracker Notification (Calculates target tier goals) */}
+              {/* Milestone Tracker Notification */}
               {currentViewMetrics.metrics.nextTierInfo && (
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-[11px] font-semibold text-slate-500 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-slate-400">
@@ -339,7 +342,7 @@ export default function BonusCalculation({
                 </div>
               )}
 
-              {/* Combined Total Calculated Bonus row alongside interactive tab toggles */}
+              {/* Bonus summary tracking container */}
               <div className="bg-emerald-50/60 border border-emerald-100/70 p-3.5 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="bg-emerald-500 text-white p-2 rounded-xl shrink-0">
@@ -351,7 +354,7 @@ export default function BonusCalculation({
                   </div>
                 </div>
 
-                {/* Horizontal Switcher Box Layout for individual shifts */}
+                {/* Horizontal Shift Swapping Box */}
                 <div className="flex bg-slate-200/60 p-0.5 rounded-lg border border-slate-200 shrink-0">
                   {(['morning', 'noon', 'night'] as AllowedShiftTabs[]).map((tab) => (
                     <button
@@ -387,7 +390,7 @@ export default function BonusCalculation({
         </div>
       </div>
 
-      {/* Operational List Breakdown View Table */}
+      {/* Operational Logs Table */}
       <div className="w-full bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-2">
           <div>

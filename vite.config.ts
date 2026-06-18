@@ -16,4 +16,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    // Setting this to true allows all incoming Cloudflare Tunnel URLs in TypeScript
+    allowedHosts: true,
+  },
 })

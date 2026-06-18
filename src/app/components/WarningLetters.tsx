@@ -90,11 +90,11 @@ export function WarningLetters() {
 
       // Construct dynamic API search query strings cleanly
       const listUrl = debouncedSearch 
-        ? `http://localhost:5000/api/warnings?searchId=${encodeURIComponent(debouncedSearch)}`
-        : 'http://localhost:5000/api/warnings';
+        ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings?searchId=${encodeURIComponent(debouncedSearch)}`
+        : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings';
 
       const [statsRes, listRes] = await Promise.all([
-        fetch('http://localhost:5000/api/warnings/stats', { headers }),
+        fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings/stats', { headers }),
         fetch(listUrl, { headers })
       ]);
       
@@ -120,7 +120,7 @@ export function WarningLetters() {
       if (formData.employee_id.length > 2 && currentUser.isMgmt) {
         setIsSearchingName(true);
         try {
-          const res = await fetch(`http://localhost:5000/api/employees/search/${formData.employee_id.trim().toUpperCase()}`, {
+          const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees/search/${formData.employee_id.trim().toUpperCase()}`, {
             headers: { 'x-user-role': currentUser.role }
           });
           const data = await res.json();
@@ -146,7 +146,7 @@ export function WarningLetters() {
       type: 'warning',
       onConfirm: async () => {
         try {
-          const res = await fetch(`http://localhost:5000/api/warnings/approve/${id}`, {
+          const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings/approve/${id}`, {
             method: 'PATCH',
             headers: { 
               'Content-Type': 'application/json',
@@ -178,8 +178,8 @@ export function WarningLetters() {
     setLoading(true);
     try {
       const url = isEditing 
-        ? `http://localhost:5000/api/warnings/${isEditing}` 
-        : 'http://localhost:5000/api/warnings';
+        ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings/${isEditing}` 
+        : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings';
       
       const res = await fetch(url, {
         method: isEditing ? 'PATCH' : 'POST',
@@ -218,7 +218,7 @@ export function WarningLetters() {
       type: 'danger',
       onConfirm: async () => {
         try {
-          const res = await fetch(`http://localhost:5000/api/warnings/${id}`, {
+          const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/warnings/${id}`, {
             method: 'DELETE',
             headers: { 
               'x-user-role': currentUser.role, 

@@ -77,9 +77,9 @@ export function Employees() {
       const authHeaders = { 'x-user-role': currentUserRole };
 
       const [empRes, depRes, projRes] = await Promise.all([
-        fetch('http://localhost:5000/api/employees', { headers: authHeaders }),
-        fetch('http://localhost:5000/api/departments', { headers: authHeaders }),
-        fetch('http://localhost:5000/api/projects', { headers: authHeaders })
+        fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees', { headers: authHeaders }),
+        fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/departments', { headers: authHeaders }),
+        fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/projects', { headers: authHeaders })
       ]);
 
       const [emps, deps, projs] = await Promise.all([empRes.json(), depRes.json(), projRes.json()]);
@@ -102,7 +102,7 @@ export function Employees() {
   const handleViewDetails = async (id: string) => {
     setFetchingProfile(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/employees/profile/${id}`, {
+      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees/profile/${id}`, {
         headers: { 'x-user-role': currentUserRole }
       });
       const result = await res.json();
@@ -120,7 +120,7 @@ export function Employees() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = editingId ? `http://localhost:5000/api/employees/${editingId}` : 'http://localhost:5000/api/employees/add';
+    const url = editingId ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees/${editingId}` : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees/add';
 
     // ✅ Switch payload assembly from a JSON string to a FormData Object boundary
     const formPayload = new FormData();
@@ -178,7 +178,7 @@ export function Employees() {
   const handleConfirmedDelete = async () => {
     if (!deleteConfirm) return;
     try {
-      await fetch(`http://localhost:5000/api/employees/${deleteConfirm.id}?admin_id=${savedUser.employee_id}&admin_name=${savedUser.name}&emp_name=${deleteConfirm.name}`, {
+      await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees/${deleteConfirm.id}?admin_id=${savedUser.employee_id}&admin_name=${savedUser.name}&emp_name=${deleteConfirm.name}`, {
         method: 'DELETE', headers: { 'x-user-role': currentUserRole }
       });
       setNotification({ message: "Employee record deleted successfully", type: 'info' });
@@ -300,7 +300,7 @@ export function Employees() {
                           {/* ✅ Displays Public Upload Target Server URL Reference */}
                           {emp.profile_image ? (
                             <img 
-                              src={`http://localhost:5000/${emp.profile_image}`} 
+                              src={`https://ambassador-michigan-mandate-penalty.trycloudflare.com/${emp.profile_image}`} 
                               alt="Profile" 
                               className="w-10 h-10 rounded-full object-cover border border-slate-100 shadow-sm"
                               onError={(e) => {
@@ -388,7 +388,7 @@ export function Employees() {
               <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
                 {viewingEmployee.profile_image ? (
                   <img 
-                    src={`http://localhost:5000/${viewingEmployee.profile_image}`} 
+                    src={`https://ambassador-michigan-mandate-penalty.trycloudflare.com/${viewingEmployee.profile_image}`} 
                     alt="Profile Avatar" 
                     className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-sm"
                   />

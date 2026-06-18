@@ -31,7 +31,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setError(null);
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password: password.trim() }),
@@ -78,7 +78,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setError(null);
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/verify-2fa', {
+      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/auth/verify-2fa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employee_id: tempUser.employee_id, token: otpToken.trim() }),
@@ -126,7 +126,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     }
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/change-password', {
+      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

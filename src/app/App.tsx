@@ -163,7 +163,7 @@ export default function App() {
     setIsLoggingOut(true);
     if (userData) {
       try {
-        await fetch('http://localhost:5000/api/logs/logout', {
+        await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/logs/logout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ employee_id: userData.employee_id }),
@@ -182,27 +182,30 @@ export default function App() {
   };
 
   const renderContent = () => {
-    const role = userData?.role || 'Employees';
+    const rawRole = userData?.role || 'Employees';
+    const normalizedRole = rawRole.toUpperCase().trim(); 
+    
     const isLogPage = ['login-logs', 'leave-logs', 'other-logs', 'analyzing'].includes(activeMenuItem);
-    const hasLogAccess = ['Super Admin', 'ER'].includes(role);
+    const hasLogAccess = ['SUPER ADMIN', 'ER'].includes(normalizedRole);
 
-    // ✅ Cleaned up: employeeInitials removed to fix type matching errors
     if (isLogPage && !hasLogAccess) {
-      return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} userRole={role} />;
+      return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} userRole={rawRole} />;
     }
 
     switch (activeMenuItem) {
-      case 'dashboard': return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} userRole={role} />;
+      case 'dashboard': return <DashboardContent employeeName={userData?.name} employeeId={userData?.employee_id} userRole={rawRole} />;
       case 'departments': return <Departments />;
       case 'projects': return <Projects />;
       case 'employees': return <Employees />;
+      
+      // ✅ Props removed to fully reconcile strict type interfaces on subcomponents
       case 'add-order': return <AddOrder />;
       case 'add-mistakes': return <AddMistakes />;
       
       case 'bonus-calculation': 
         return (
           <BonusCalculation 
-            employeeDesignation={userData?.role} 
+            employeeDesignation={rawRole} 
             currentEmployeeId={userData?.employee_id} 
           />
         ); 
@@ -214,7 +217,7 @@ export default function App() {
       case 'attendance-records': 
         return (
           <AttendanceRecords 
-            userRole={role} 
+            userRole={rawRole} 
             employeeId={userData?.employee_id} 
           />
         );
@@ -226,8 +229,8 @@ export default function App() {
       case 'leave-logs': return <LeaveLogs />;
       case 'other-logs': return <OtherLogs />;
       case 'analyzing': return <Analyzing />; 
-      case 'feedback': return <FeedbackForm userRole={role} userData={userData ? { name: userData.name, employee_id: userData.employee_id } : undefined} />;
-      default: return <DashboardContent employeeName={userData?.name} userRole={role} />;
+      case 'feedback': return <FeedbackForm userRole={rawRole} userData={userData ? { name: userData.name, employee_id: userData.employee_id } : undefined} />;
+      default: return <DashboardContent employeeName={userData?.name} userRole={rawRole} />;
     }
   };
 
@@ -235,7 +238,7 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const isSuperAdmin = userData?.role === 'Super Admin';
+  const isSuperAdmin = userData?.role?.toUpperCase().trim() === 'SUPER ADMIN';
   const isFeedbackPage = activeMenuItem === 'feedback';
   const isEmployeeFeedbackView = isFeedbackPage && !isSuperAdmin;
 

@@ -17,7 +17,7 @@ export function LoginLogs() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/logs');
+        const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/logs');
         const result = await response.json();
         if (result.success) {
           setLogs(result.data);

@@ -25,7 +25,7 @@ export function LeaveLogs() {
   useEffect(() => {
     const fetchAllLogs = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/leave-logs/all-logs', {
+        const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/leave-logs/all-logs', {
           headers: {
             'x-user-role': storedUser.role || ''
           }

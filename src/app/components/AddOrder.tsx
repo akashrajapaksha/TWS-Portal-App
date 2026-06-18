@@ -20,20 +20,24 @@ interface PerformanceEntry {
   order_count: string;
 }
 
+interface AddOrderProps {
+  userRole?: string;
+}
+
 // Helper to normalize dates into clean YYYY-MM-DD formats for inputs and tables
 const formatDateString = (dateInput: string) => {
   if (!dateInput) return '';
   return dateInput.split('T')[0];
 };
 
-export function AddOrder() {
+export function AddOrder({ userRole: propUserRole }: AddOrderProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchingEmployee, setIsSearchingEmployee] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>(propUserRole || '');
 
   // Notification States
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
@@ -59,25 +63,33 @@ export function AddOrder() {
   ];
 
   useEffect(() => {
-    const savedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
-    setUserRole(savedUser.role || '');
-  }, []);
+    if (!propUserRole) {
+      const savedUser = JSON.parse(sessionStorage.getItem('tws_user') || localStorage.getItem('tws_user') || '{}');
+      setUserRole(savedUser.role || '');
+    } else {
+      setUserRole(propUserRole);
+    }
+  }, [propUserRole]);
 
   const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
-  }, hasFullAccess = ['Super Admin', 'Supervisors', 'TSP'].includes(userRole);
+  };
+
+  // --- 🛠️ SYNCHRONIZED COMPLIANCE MATCHING FOR TPS / TSP ROLES ---
+  const normalizedRole = userRole.toUpperCase().trim();
+  const hasFullAccess = ['SUPER ADMIN', 'SUPERVISORS', 'TSP', 'TPS'].includes(normalizedRole);
   
-  const isLD = userRole === 'LD';
+  const isLD = normalizedRole === 'LD';
   const canModify = hasFullAccess || isLD;
   const canDelete = hasFullAccess;
-  const canViewPage = userRole !== 'Employees';
+  const canViewPage = normalizedRole !== 'EMPLOYEES' && normalizedRole !== '';
 
   const fetchOrders = useCallback(async () => {
     if (!userRole) return;
     try {
       setIsLoading(true);
-      const res = await fetch('http://localhost:5000/api/orders', {
+      const res = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders', {
         headers: { 'x-user-role': userRole }
       });
       const data = await res.json();
@@ -101,7 +113,7 @@ export function AddOrder() {
       
       setIsSearchingEmployee(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/orders/fetch-by-id/${employeeId}`, {
+        const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/fetch-by-id/${employeeId}`, {
           headers: { 'x-user-role': userRole } 
         });
         const data = await res.json();
@@ -157,7 +169,7 @@ export function AddOrder() {
   const handleDelete = async () => {
     if (!deleteConfirm.item) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/orders/${deleteConfirm.item.id}`, { 
+      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/${deleteConfirm.item.id}`, { 
         method: 'DELETE', 
         headers: { 'x-user-role': userRole } 
       });
@@ -181,10 +193,10 @@ export function AddOrder() {
         return triggerToast("Please enter a valid Employee ID", 'error');
     }
 
-    const savedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
+    const savedUser = JSON.parse(sessionStorage.getItem('tws_user') || localStorage.getItem('tws_user') || '{}');
     const endpoint = editingId 
-      ? `http://localhost:5000/api/orders/${editingId}` 
-      : 'http://localhost:5000/api/orders/add';
+      ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/${editingId}` 
+      : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/add';
     
     // Construct request structural body parameters
     const payload = editingId 

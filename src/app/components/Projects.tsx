@@ -50,7 +50,7 @@ export function Projects() {
   const fetchProjects = useCallback(async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('http://localhost:5000/api/projects', {
+      const res = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/projects', {
         headers: { 'x-user-role': userRole }
       });
       const data = await res.json();
@@ -99,7 +99,7 @@ export function Projects() {
     }).toString();
 
     try {
-      const res = await fetch(`http://localhost:5000/api/projects/${deleteConfirm.id}?${queryParams}`, { 
+      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/projects/${deleteConfirm.id}?${queryParams}`, { 
         method: 'DELETE',
         headers: { 'x-user-role': userRole }
       });
@@ -121,8 +121,8 @@ export function Projects() {
     e.preventDefault();
     const savedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
     const url = editingId 
-      ? `http://localhost:5000/api/projects/${editingId}` 
-      : 'http://localhost:5000/api/projects/add';
+      ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/projects/${editingId}` 
+      : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/projects/add';
 
     try {
       const res = await fetch(url, {

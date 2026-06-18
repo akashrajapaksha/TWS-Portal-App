@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 // Pointing back to your local development server
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://ambassador-michigan-mandate-penalty.trycloudflare.com';
 
 export function Analyzing({ onBack }: { onBack?: () => void }) {
   // --- TOGGLE FOR WORK IN PROGRESS STATUS ---
