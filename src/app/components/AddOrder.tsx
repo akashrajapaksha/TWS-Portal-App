@@ -89,7 +89,7 @@ export function AddOrder({ userRole: propUserRole }: AddOrderProps) {
     if (!userRole) return;
     try {
       setIsLoading(true);
-      const res = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders', {
+      const res = await fetch('http://localhost:5000/api/orders', {
         headers: { 'x-user-role': userRole }
       });
       const data = await res.json();
@@ -113,7 +113,7 @@ export function AddOrder({ userRole: propUserRole }: AddOrderProps) {
       
       setIsSearchingEmployee(true);
       try {
-        const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/fetch-by-id/${employeeId}`, {
+        const res = await fetch(`http://localhost:5000/api/orders/fetch-by-id/${employeeId}`, {
           headers: { 'x-user-role': userRole } 
         });
         const data = await res.json();
@@ -169,7 +169,7 @@ export function AddOrder({ userRole: propUserRole }: AddOrderProps) {
   const handleDelete = async () => {
     if (!deleteConfirm.item) return;
     try {
-      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/${deleteConfirm.item.id}`, { 
+      const res = await fetch(`http://localhost:5000/api/orders/${deleteConfirm.item.id}`, { 
         method: 'DELETE', 
         headers: { 'x-user-role': userRole } 
       });
@@ -195,8 +195,8 @@ export function AddOrder({ userRole: propUserRole }: AddOrderProps) {
 
     const savedUser = JSON.parse(sessionStorage.getItem('tws_user') || localStorage.getItem('tws_user') || '{}');
     const endpoint = editingId 
-      ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/${editingId}` 
-      : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/orders/add';
+      ? `http://localhost:5000/api/orders/${editingId}` 
+      : 'http://localhost:5000/api/orders/add';
     
     // Construct request structural body parameters
     const payload = editingId 

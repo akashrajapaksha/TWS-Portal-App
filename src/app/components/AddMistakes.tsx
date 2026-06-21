@@ -73,7 +73,7 @@ export function AddMistakes() {
   const fetchMistakes = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/mistakes');
+      const res = await fetch('http://localhost:5000/api/mistakes');
       const data = await res.json();
       if (data.success) setMistakes(data.mistakes);
     } catch (error) { 
@@ -90,7 +90,7 @@ export function AddMistakes() {
     if (upperId.trim().length >= 3) {
       setIsFetchingEmp(true);
       try {
-        const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/mistakes/fetch-by-id/${upperId}`);
+        const res = await fetch(`http://localhost:5000/api/mistakes/fetch-by-id/${upperId}`);
         const data = await res.json();
         if (data.success) {
           setFormData(prev => ({ 
@@ -125,7 +125,7 @@ export function AddMistakes() {
     }).toString();
 
     try {
-      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/mistakes/${m.id}?${queryParams}`, { method: 'DELETE' });
+      const res = await fetch(`http://localhost:5000/api/mistakes/${m.id}?${queryParams}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         triggerToast("Log deleted successfully");
@@ -147,7 +147,7 @@ export function AddMistakes() {
     }
 
     const savedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
-    const url = editingId ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/mistakes/${editingId}` : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/mistakes/add';
+    const url = editingId ? `http://localhost:5000/api/mistakes/${editingId}` : 'http://localhost:5000/api/mistakes/add';
     
     const payload = {
         ...formData,

@@ -80,8 +80,8 @@ export function AttendanceRecords({ userRole, employeeId }: AttendanceProps) {
     try {
       setLoading(true);
       const url = isSuperAdmin 
-        ? 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/attendance?auth=SUPER ADMIN' 
-        : `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/attendance?auth=EMPLOYEES&employee_id=${employeeId}`;
+        ? 'http://localhost:5000/api/attendance?auth=SUPER ADMIN' 
+        : `http://localhost:5000/api/attendance?auth=EMPLOYEES&employee_id=${employeeId}`;
       
       const response = await fetch(url);
       const data = await response.json();

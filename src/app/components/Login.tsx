@@ -31,7 +31,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setError(null);
     setIsLoading(true);
     try {
-      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/auth/login', {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password: password.trim() }),
@@ -44,23 +44,18 @@ export function Login({ onLoginSuccess }: LoginProps) {
         } else if (result.user.is_first_login) {
           setMustChangePassword(true);
         } else {
-          // ✅ SCREEN 1: Standard Login save sequence with profile_image injection included
-          localStorage.setItem('tws_user', JSON.stringify({
+          // ✅ SCREEN 1: Super Admin straight login save sequence updated with designation
+          const adminPayload = {
             id: result.user.id,
             name: result.user.name,
             role: result.user.role,
+            designation: result.user.designation || result.user.role || 'Employees', // ✨ Added tracking parameter
             initials: result.user.initials,
             employee_id: result.user.employee_id,
-            profile_image: result.user.profile_image // Added tracking prop directly here
-          }));
-          sessionStorage.setItem('tws_user', JSON.stringify({
-            id: result.user.id,
-            name: result.user.name,
-            role: result.user.role,
-            initials: result.user.initials,
-            employee_id: result.user.employee_id,
-            profile_image: result.user.profile_image // Also safe-track on fallback context systems
-          }));
+            profile_image: result.user.profile_image 
+          };
+          localStorage.setItem('tws_user', JSON.stringify(adminPayload));
+          sessionStorage.setItem('tws_user', JSON.stringify(adminPayload));
           onLoginSuccess();
         }
       } else {
@@ -78,7 +73,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setError(null);
     setIsLoading(true);
     try {
-      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/auth/verify-2fa', {
+      const response = await fetch('http://localhost:5000/api/auth/verify-2fa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employee_id: tempUser.employee_id, token: otpToken.trim() }),
@@ -94,14 +89,15 @@ export function Login({ onLoginSuccess }: LoginProps) {
           setMustChangePassword(true);
           setShow2FA(false);
         } else {
-          // ✅ SCREEN 2: 2FA Verification save sequence with profile_image tracking logic 
+          // ✅ SCREEN 2: 2FA Verification save sequence updated with designation
           const verifiedUserPayload = {
             id: result.user.id,
             name: result.user.name,
             role: result.user.role,
+            designation: result.user.designation || result.user.role || 'Employees', // ✨ Added tracking parameter
             initials: result.user.initials,
             employee_id: result.user.employee_id,
-            profile_image: result.user.profile_image // Capture payload image key property safely
+            profile_image: result.user.profile_image 
           };
           
           localStorage.setItem('tws_user', JSON.stringify(verifiedUserPayload));
@@ -126,7 +122,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     }
     setIsLoading(true);
     try {
-      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/auth/change-password', {
+      const response = await fetch('http://localhost:5000/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -139,11 +135,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
       if (response.ok && result.success) {
         setSuccessMsg("Credentials Secured!");
         
-        // ✅ SCREEN 3: Password Update save sequence with profile_image propagation loop 
+        // ✅ SCREEN 3: Password Update save sequence updated with designation mapping fallback
         const updatedUserPayload = { 
           ...tempUser, 
           is_first_login: false,
-          profile_image: tempUser.profile_image // Map down string payload from earlier setup step securely
+          designation: tempUser.designation || tempUser.role || 'Employees', // ✨ Spread and patch object map
+          profile_image: tempUser.profile_image 
         };
 
         localStorage.setItem('tws_user', JSON.stringify(updatedUserPayload));

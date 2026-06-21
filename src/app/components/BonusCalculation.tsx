@@ -100,7 +100,7 @@ export default function BonusCalculation({
       setError('');
       try {
         const response = await fetch(
-          `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/bonus/public-search/${formData.employeeId.trim()}`,
+          `http://localhost:5000/api/bonus/public-search/${formData.employeeId.trim()}`,
           {
             method: 'GET',
             headers: getUserAuthHeaders()
@@ -149,7 +149,7 @@ export default function BonusCalculation({
     };
 
     try {
-      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/bonus/analyze', {
+      const response = await fetch('http://localhost:5000/api/bonus/analyze', {
         method: 'POST',
         headers: getUserAuthHeaders(),
         body: JSON.stringify(baselinePayload),

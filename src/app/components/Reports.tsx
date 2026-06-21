@@ -69,7 +69,7 @@ export function Reports() {
         toDate 
       });
 
-      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/reports/performance?${params}`);
+      const res = await fetch(`http://localhost:5000/api/reports/performance?${params}`);
       const data = await res.json();
       if (data.success) {
         setReport(data);

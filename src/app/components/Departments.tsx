@@ -49,7 +49,7 @@ export function Departments() {
   const fetchDepartments = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/departments', {
+      const response = await fetch('http://localhost:5000/api/departments', {
         headers: { 'x-user-role': userRole }
       });
       const data = await response.json();
@@ -85,8 +85,8 @@ export function Departments() {
     e.preventDefault();
     const savedUser = JSON.parse(localStorage.getItem('tws_user') || '{}');
     const url = editingId 
-      ? `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/departments/${editingId}` 
-      : 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/departments/add';
+      ? `http://localhost:5000/api/departments/${editingId}` 
+      : 'http://localhost:5000/api/departments/add';
     
     try {
       const response = await fetch(url, {
@@ -125,7 +125,7 @@ export function Departments() {
     }).toString();
 
     try {
-      const response = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/departments/${deleteConfirm.id}?${queryParams}`, { 
+      const response = await fetch(`http://localhost:5000/api/departments/${deleteConfirm.id}?${queryParams}`, { 
         method: 'DELETE',
         headers: { 'x-user-role': userRole }
       });

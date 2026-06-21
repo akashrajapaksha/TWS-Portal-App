@@ -19,7 +19,7 @@ export function OtherLogs() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/other-logs');
+      const response = await fetch('http://localhost:5000/api/other-logs');
       const result = await response.json();
 
       if (result.success) {

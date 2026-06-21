@@ -74,7 +74,7 @@ export function IncidentReports() {
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/ir?userRole=${userRole}&loggedInEmployeeId=${loggedInEmployeeId}&searchId=${searchId}`);
+      const res = await fetch(`http://localhost:5000/api/ir?userRole=${userRole}&loggedInEmployeeId=${loggedInEmployeeId}&searchId=${searchId}`);
       const result = await res.json();
       if (result.success) setReports(result.data || []);
     } catch (err) {
@@ -100,7 +100,7 @@ export function IncidentReports() {
       type: 'warning',
       onConfirm: async () => {
         try {
-          const res = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/ir/promote-from-mistake', {
+          const res = await fetch('http://localhost:5000/api/ir/promote-from-mistake', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -128,7 +128,7 @@ export function IncidentReports() {
     if (!targetId) return;
     setIsFetchingEmp(true);
     try {
-      const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/ir/fetch-by-id/${targetId}`);
+      const res = await fetch(`http://localhost:5000/api/ir/fetch-by-id/${targetId}`);
       const result = await res.json();
       if (result.success) {
         setFormData(prev => ({
@@ -165,7 +165,7 @@ export function IncidentReports() {
       return showToast("Please enter a valid Employee ID.", 'error');
     }
     try {
-      const res = await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/ir/add', {
+      const res = await fetch('http://localhost:5000/api/ir/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -200,7 +200,7 @@ export function IncidentReports() {
       type: 'danger',
       onConfirm: async () => {
         try {
-          const res = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/ir/${id}?userRole=${userRole}`, { method: 'DELETE' });
+          const res = await fetch(`http://localhost:5000/api/ir/${id}?userRole=${userRole}`, { method: 'DELETE' });
           const result = await res.json();
           if (result.success) {
             setReports(prev => prev.filter(r => r.id !== id));

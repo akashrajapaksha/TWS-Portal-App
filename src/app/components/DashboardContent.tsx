@@ -4,9 +4,9 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = 'https://ambassador-michigan-mandate-penalty.trycloudflare.com/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 // ✅ ADDED: Define server base path to resolve profile image URL addresses correctly
-const SERVER_BASE_URL = 'https://ambassador-michigan-mandate-penalty.trycloudflare.com';
+const SERVER_BASE_URL = 'http://localhost:5000';
 
 interface LeaveRecord {
   id: string;

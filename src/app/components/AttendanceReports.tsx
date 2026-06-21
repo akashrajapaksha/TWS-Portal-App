@@ -36,7 +36,7 @@ export function AttendanceReports() {
     try {
       // --- STEP 1: TEST THE EMPLOYEE MASTER LOOKUP (NON-BLOCKING) ---
       console.log(`Searching master records for employee: ${query.trim()}`);
-      const empRes = await fetch(`https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/employees/public-search/${query.trim()}`);
+      const empRes = await fetch(`http://localhost:5000/api/employees/public-search/${query.trim()}`);
       
       if (!empRes.ok) {
         const errorData = await empRes.json();
@@ -50,7 +50,7 @@ export function AttendanceReports() {
       // --- STEP 2: FETCH THE ACTUAL ATTENDANCE LOGS ---
       console.log(`Fetching logs for ID ${query.trim()} from ${startDate} to ${endDate}`);
       const reportRes = await fetch(
-        `https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/attendance-reports/generate?employee_id=${query.trim()}&start_date=${startDate}&end_date=${endDate}`
+        `http://localhost:5000/api/attendance-reports/generate?employee_id=${query.trim()}&start_date=${startDate}&end_date=${endDate}`
       );
       
       if (!reportRes.ok) {

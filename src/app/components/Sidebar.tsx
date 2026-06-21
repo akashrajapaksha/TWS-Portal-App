@@ -5,7 +5,6 @@ import {
   ChevronRight,
   ChevronDown,
   LogOut,
-  Users,
   ChartBar,
   Calendar,
   FileText,
@@ -20,7 +19,7 @@ interface SidebarProps {
   onLogout?: () => void; 
   isCollapsed?: boolean;
   employeeName?: string;
-  employeeDesignation?: string; 
+  employeeDesignation?: string; // Holds descriptive designation text (e.g. "ER-Specialist", "IT Admin")
   employeeInitials?: string;
   profileImage?: string;
 }
@@ -54,21 +53,22 @@ export function Sidebar({
   const [expandedItems, setExpandedItems] = useState<string[]>(['performance']);
   const [imageError, setImageError] = useState(false);
 
-  // --- 🛠️ ROBUST ROLE LOGIC ---
+  // --- 🛠️ ROBUST FLEXIBLE DESIGNATION MAPPING ---
   const userRole = employeeDesignation?.toUpperCase().trim() || '';
   
-  const isSuperAdmin = userRole === 'SUPER ADMIN';
-  const isSupervisor = userRole === 'SUPERVISORS'; 
-  const isLD = userRole === 'LD';
+  // Normalized base authorization checking via substring intersections
+  const isSuperAdmin = userRole.includes('SUPER ADMIN');
+  const isSupervisor = userRole.includes('SUPERVISOR') || userRole.includes('SUPERVISORS'); 
+  const isLD = userRole === 'LD' || userRole.startsWith('LD-');
+  const isER = userRole === 'ER' || userRole.startsWith('ER-'); 
+  const isTSPUser = userRole.includes('TSP') || userRole.includes('TPS');
   
-  // Checking for both TSP and TPS variations to guarantee match safety
-  const isTSPUser = userRole === 'TSP' || userRole === 'TPS';
-  
-  // Expanded authority mapping to give TSP full access
+  // Group authority flag 
   const isAuthority = [
-    'SUPER ADMIN', 'ADMIN', 'SUPERVISORS', 'ER', 'TSP', 'TPS', 'LD'
-  ].includes(userRole);
+    'SUPER ADMIN', 'ADMIN', 'SUPERVISORS', 'SUPERVISOR', 'ER', 'TSP', 'TPS', 'LD'
+  ].includes(userRole) || isSuperAdmin || isSupervisor || isER || isTSPUser;
 
+  // View Level Controls
   const canSeeOrganization = isAuthority && !isSupervisor && !isLD;
   const canAccessLogs = isSuperAdmin;
   const canSeeAnalyzing = isSuperAdmin; 
@@ -153,7 +153,7 @@ export function Sidebar({
     if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
       return src;
     }
-    const backendBaseUrl = 'https://ambassador-michigan-mandate-penalty.trycloudflare.com'; 
+    const backendBaseUrl = 'http://localhost:5000'; 
     return src.startsWith('/') ? `${backendBaseUrl}${src}` : `${backendBaseUrl}/${src}`;
   };
 
@@ -183,6 +183,7 @@ export function Sidebar({
               <div className="font-bold text-gray-900 text-sm truncate leading-tight uppercase italic" title={employeeName}>
                   {employeeName}
               </div>
+              {/* Displays custom corporate designations cleanly */}
               <div className="text-[10px] uppercase tracking-widest text-indigo-500 font-black mt-0.5 truncate">
                   {employeeDesignation}
               </div>

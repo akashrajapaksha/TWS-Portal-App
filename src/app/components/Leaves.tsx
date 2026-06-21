@@ -34,7 +34,12 @@ interface AuditData {
   };
 }
 
-const BASE_SERVER_URL = 'https://ambassador-michigan-mandate-penalty.trycloudflare.com';
+interface DateBreakdown {
+  dateStr: string;
+  isHalfDay: boolean;
+}
+
+const BASE_SERVER_URL = 'http://localhost:5000';
 const API_BASE_URL = `${BASE_SERVER_URL}/api/leaves`;
 
 export function Leaves() {
@@ -91,6 +96,9 @@ export function Leaves() {
     totalDays: 0,
     reason: '',
   });
+
+  // Dynamic state to hold configuration metrics for each individual date row
+  const [dateBreakdown, setDateBreakdown] = useState<DateBreakdown[]>([]);
 
   const leaveOptions = ['Annual', 'Casual', 'Medical', 'No Pay'];
 
@@ -190,15 +198,49 @@ export function Leaves() {
     executeAnalyticsLookup(lookupId, defaultDate);
   };
 
+  // Generates per-date settings arrays dynamically when the calendar fields shift
   const handleDateChange = (field: string, value: string) => {
-    const newFormData = { ...formData, [field]: value };
-    if (newFormData.fromDate && newFormData.toDate) {
-      const start = new Date(newFormData.fromDate);
-      const end = new Date(newFormData.toDate);
-      const diff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      newFormData.totalDays = diff > 0 ? diff : 0;
+    const nextFormData = { ...formData, [field]: value };
+    
+    if (nextFormData.fromDate && nextFormData.toDate) {
+      const start = new Date(nextFormData.fromDate);
+      const end = new Date(nextFormData.toDate);
+      
+      if (start <= end) {
+        const structuralBreakdown: DateBreakdown[] = [];
+        let currentLoopDate = new Date(start);
+
+        while (currentLoopDate <= end) {
+          const isoString = currentLoopDate.toISOString().split('T')[0];
+          structuralBreakdown.push({
+            dateStr: isoString,
+            isHalfDay: false
+          });
+          currentLoopDate.setDate(currentLoopDate.getDate() + 1);
+        }
+
+        setDateBreakdown(structuralBreakdown);
+        nextFormData.totalDays = structuralBreakdown.length;
+      } else {
+        setDateBreakdown([]);
+        nextFormData.totalDays = 0;
+      }
     }
-    setFormData(newFormData);
+    setFormData(nextFormData);
+  };
+
+  // Handles modifying specific day allocations out of the collective batch array
+  const handleIndividualDayWeightToggle = (index: number, isHalf: boolean) => {
+    const freshBreakdown = [...dateBreakdown];
+    freshBreakdown[index].isHalfDay = isHalf;
+    setDateBreakdown(freshBreakdown);
+
+    // Dynamic operational aggregate recalculation engine loop
+    const calculatedSum = freshBreakdown.reduce((accum, day) => {
+      return accum + (day.isHalfDay ? 0.5 : 1.0);
+    }, 0);
+
+    setFormData(prev => ({ ...prev, totalDays: calculatedSum }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,6 +276,9 @@ export function Leaves() {
       payload.append('user_id', user?.id || '');
       payload.append('project_name', user?.project || 'GENERAL');
       
+      // Send the granular mapping back to the API endpoint for logging if required
+      payload.append('date_breakdown_matrix', JSON.stringify(dateBreakdown));
+      
       if (selectedFile) {
         payload.append('document', selectedFile);
       }
@@ -251,6 +296,7 @@ export function Leaves() {
         fetchData(user);
         showToast(data.message || "Application and files forwarded into workflow!");
         setFormData({ leaveType: 'Annual', fromDate: '', toDate: '', totalDays: 0, reason: '' }); 
+        setDateBreakdown([]);
         setSelectedFile(null);
       } else {
         showToast(data.message, 'error');
@@ -408,6 +454,156 @@ export function Leaves() {
         </div>
       )}
 
+      {/* --- Leave Request Form Modal Subsystem --- */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-xl w-full shadow-2xl my-8 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-black text-gray-900 uppercase italic">New Allocation Filing</h3>
+              <button 
+                onClick={() => setShowAddModal(false)} 
+                className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded-xl transition-all"
+              >
+                <X size={18} strokeWidth={3} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Leave Category Classification</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {leaveOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, leaveType: option })}
+                      className={`py-3 text-[11px] font-black uppercase rounded-xl border-2 transition-all tracking-tight ${
+                        formData.leaveType === option 
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-600' 
+                          : 'border-gray-100 hover:border-gray-200 text-gray-500'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Start Date Vector</label>
+                  <input 
+                    type="date" 
+                    required
+                    value={formData.fromDate}
+                    onChange={(e) => handleDateChange('fromDate', e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl font-bold focus:border-blue-600 outline-none text-xs text-gray-700 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">End Date Vector</label>
+                  <input 
+                    type="date" 
+                    required
+                    value={formData.toDate}
+                    onChange={(e) => handleDateChange('toDate', e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl font-bold focus:border-blue-600 outline-none text-xs text-gray-700 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* --- Granular Per-Date Allocation Subsystem Row Grid --- */}
+              {dateBreakdown.length > 0 && (
+                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 space-y-3 max-h-[190px] overflow-y-auto animate-in slide-in-from-top-3 duration-300">
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                    Configure Day Weighting Parameters per Chosen Date Vector:
+                  </label>
+                  <div className="space-y-2">
+                    {dateBreakdown.map((day, idx) => (
+                      <div key={day.dateStr} className="flex items-center justify-between bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+                        <span className="text-xs font-mono font-black text-gray-700">
+                          {new Date(day.dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => handleIndividualDayWeightToggle(idx, false)}
+                            className={`px-3 py-1 text-[9px] font-black uppercase rounded-md transition-all ${
+                              !day.isHalfDay ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                          >
+                            Full Day
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleIndividualDayWeightToggle(idx, true)}
+                            className={`px-3 py-1 text-[9px] font-black uppercase rounded-md transition-all ${
+                              day.isHalfDay ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                          >
+                            Half Day
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 bg-blue-50/30 rounded-2xl border border-blue-100 flex justify-between items-center">
+                <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Calculated Roster Metrics:</span>
+                <span className={`text-base font-black uppercase ${isBalanceExceeded ? 'text-red-500 animate-pulse' : 'text-blue-700'}`}>
+                  {formData.totalDays} Total Days {isBalanceExceeded && '(Exceeds Balance Pool)'}
+                </span>
+              </div>
+
+              {formData.leaveType === 'Medical' && (
+                <div className="p-5 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Paperclip size={12} /> Medical Verification File Attachment
+                  </label>
+                  <input 
+                    type="file" 
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleFileChange}
+                    className="block w-full text-xs text-gray-400 font-bold file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-gray-900 file:text-white hover:file:bg-blue-600 file:transition-all cursor-pointer"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Statement Cause & Operational Intent</label>
+                <textarea 
+                  required
+                  rows={3}
+                  placeholder="PROVIDE REASON SUBSTANTIATION METRICS..."
+                  value={formData.reason}
+                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl font-bold focus:border-blue-600 outline-none text-xs text-gray-700 transition-all placeholder:opacity-50"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 py-3 text-[11px] font-black uppercase text-gray-400 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all"
+                >
+                  Discard
+                </button>
+                <button 
+                  type="submit"
+                  disabled={submitting || isBalanceExceeded}
+                  className="flex-1 py-3 text-[11px] font-black uppercase text-white bg-blue-600 disabled:bg-gray-200 rounded-xl shadow-lg shadow-blue-100 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 className="animate-spin w-4 h-4" /> : 'Deploy Application'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
           <div>
@@ -518,22 +714,20 @@ export function Leaves() {
                   <div className={`border p-4 rounded-2xl text-center transition-all ${
                     conflictingStaff > 0 ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50/50 border-emerald-100 text-emerald-600'
                   }`}>
-                    <p className="text-[10px] font-black uppercase tracking-widest">
-                      {conflictingStaff > 0 ? `⚠️ Roster Impact Context: ${conflictingStaff} Staff Out` : '✅ 100% Core Coverage Guaranteed'}
-                    </p>
-                    <p className="text-[9px] font-bold opacity-80 uppercase mt-0.5">
-                      {conflictingStaff > 0 ? 'Concurrent approved absences detected on this date' : 'No staff overlaps discovered along this calendar grid line'}
-                    </p>
+                    <span className="text-[9px] font-black uppercase tracking-widest block opacity-70 mb-1">Approved Team Absences</span>
+                    <span className="text-xl font-black">{conflictingStaff} Employees Absent</span>
+                    <p className="text-[8px] font-bold uppercase mt-1 opacity-60">On Target Vector Day: {matrixDate}</p>
                   </div>
                 ) : (
-                  <p className="text-[10px] font-bold text-gray-300 uppercase italic">Select date block vectors to calculate resource capacity.</p>
+                  <p className="text-[10px] font-bold text-gray-300 uppercase italic">Select date parameter metric above...</p>
                 )}
               </div>
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
+        {/* --- Main Table Frame Layout Content --- */}
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden mt-6">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -627,7 +821,7 @@ export function Leaves() {
                                       <button 
                                         onClick={() => processWorkflowAction(app.id, 'APPROVE', app.leave_type)} 
                                         title="Approve Application"
-                                        className="p-1.5 bg-green-500 text-white rounded-lg hover:scale-110 transition-all shadow-md"
+                                        className="p-1.5 bg-green-600 text-white rounded-lg hover:scale-110 transition-all shadow-md"
                                       >
                                         <Check size={14} strokeWidth={4} />
                                       </button>
@@ -638,7 +832,7 @@ export function Leaves() {
                                 <button 
                                   onClick={() => processWorkflowAction(app.id, 'REJECT', app.leave_type)}
                                   title="Reject Application"
-                                  className="p-1.5 bg-red-500 text-white rounded-lg hover:scale-110 transition-all shadow-md"
+                                  className="p-1.5 bg-red-600 text-white rounded-lg hover:scale-110 transition-all shadow-md"
                                 >
                                   <X size={14} strokeWidth={4} />
                                 </button>
@@ -652,25 +846,22 @@ export function Leaves() {
                         </td>
                       )}
 
-                      <td className="px-8 py-6 max-w-xs truncate">
-                        <div className="flex flex-col gap-1">
-                          <p className="text-xs text-gray-700 font-bold">{app.reason || 'No statement provided.'}</p>
-                          {app.reject_reason && (
-                            <p className="text-[10px] text-red-500 font-extrabold uppercase">
-                              Rejection Node Note: {app.reject_reason}
-                            </p>
-                          )}
-                          {app.attachment_url && (
-                            <a 
-                              href={`${BASE_SERVER_URL}${app.attachment_url}`} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="text-blue-600 hover:underline text-[10px] uppercase font-black flex items-center gap-1 mt-1"
-                            >
-                              <Paperclip size={10} strokeWidth={3} /> View Attached File Docs
-                            </a>
-                          )}
-                        </div>
+                      <td className="px-8 py-6 font-semibold text-gray-400 max-w-xs truncate">
+                        {app.status === 'Rejected' && app.reject_reason ? (
+                          <span className="text-red-500 block text-xs"><span className="font-black">Rejection:</span> {app.reject_reason}</span>
+                        ) : (
+                          <span>{app.reason}</span>
+                        )}
+                        {app.attachment_url && (
+                          <a 
+                            href={`${BASE_SERVER_URL}${app.attachment_url}`} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="inline-flex items-center gap-1 mt-1 text-xs text-blue-600 font-black uppercase hover:underline"
+                          >
+                            <FileText size={12} /> Medical Verification Doc
+                          </a>
+                        )}
                       </td>
                     </tr>
                   );
@@ -680,114 +871,6 @@ export function Leaves() {
           </div>
         </div>
       </div>
-
-      {/* Leave Application Input Modal Form */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[3rem] p-8 md:p-12 max-w-lg w-full shadow-2xl relative my-8 animate-in zoom-in-95 duration-200">
-            <button 
-              onClick={() => setShowAddModal(false)}
-              className="absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-red-50 hover:text-red-500 transition-all"
-            >
-              <X size={18} strokeWidth={3} />
-            </button>
-            
-            <h2 className="text-3xl font-black italic tracking-tighter uppercase text-gray-900 mb-8">Create Leave Order</h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Leave Category</label>
-                <select 
-                  value={formData.leaveType}
-                  onChange={(e) => setFormData({ ...formData, leaveType: e.target.value })}
-                  className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent font-bold text-xs uppercase rounded-2xl focus:border-blue-600 outline-none transition-all text-gray-700"
-                >
-                  {leaveOptions.map(opt => <option key={opt} value={opt}>{opt} Allocation</option>)}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Date</label>
-                  <input 
-                    type="date" 
-                    value={formData.fromDate}
-                    onChange={(e) => handleDateChange('fromDate', e.target.value)}
-                    required
-                    className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent font-bold text-xs text-gray-700 rounded-2xl focus:border-blue-600 outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Date</label>
-                  <input 
-                    type="date" 
-                    value={formData.toDate}
-                    onChange={(e) => handleDateChange('toDate', e.target.value)}
-                    required
-                    className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent font-bold text-xs text-gray-700 rounded-2xl focus:border-blue-600 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Continuous Window</span>
-                <span className={`text-xl font-black italic ${isBalanceExceeded ? 'text-red-500' : 'text-blue-600'}`}>
-                  {formData.totalDays} Days Calculated
-                </span>
-              </div>
-
-              {isBalanceExceeded && (
-                <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
-                  <AlertCircle size={14} className="flex-shrink-0" /> Target timeframe bounds exceed current personal balance counters
-                </div>
-              )}
-
-              {formData.leaveType === 'Medical' && (
-                <div className="space-y-2 animate-in slide-in-from-top-2">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                    Upload Validation Docs (PDF/JPG required)
-                  </label>
-                  <div className="relative border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center hover:border-blue-500 transition-colors">
-                    <input 
-                      type="file" 
-                      accept=".pdf, .jpg, .jpeg, .png"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                    <div className="flex flex-col items-center justify-center gap-1">
-                      <FileText className="w-6 h-6 text-gray-400" />
-                      <span className="text-[11px] font-bold text-gray-500 truncate max-w-xs">
-                        {selectedFile ? selectedFile.name : 'Select or drop validation file here'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Justification Statement</label>
-                <textarea 
-                  rows={3}
-                  placeholder="PROVIDE OPERATIONAL COGNIZANT CONTEXT DETAILS..."
-                  value={formData.reason}
-                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                  required
-                  className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent font-bold text-xs rounded-2xl focus:border-blue-600 outline-none transition-all uppercase text-gray-700"
-                />
-              </div>
-
-              <button 
-                type="submit"
-                disabled={submitting || isBalanceExceeded}
-                className="w-full bg-black text-white font-black uppercase italic tracking-tight text-sm py-5 rounded-2xl shadow-xl hover:bg-blue-600 disabled:bg-gray-100 disabled:text-gray-300 disabled:scale-100 active:scale-98 transition-all flex justify-center items-center gap-2"
-              >
-                {submitting ? <Loader2 className="animate-spin w-4 h-4" /> : 'Dispatch Assignment To Pipeline'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

@@ -24,13 +24,13 @@ import { AttendanceReports } from './components/AttendanceReports';
 
 // --- FESTIVAL ANIMATION COMPONENT ---
 const NewYearAnimation = () => {
-  const [show, setShow] = useState(false);
+  const [show, useStateCheck] = useState(false);
 
   useEffect(() => {
     const now = new Date();
     const isApril = now.getMonth() === 3; // 0-indexed: 3 is April
     const isActiveRange = now.getDate() >= 11 && now.getDate() <= 16;
-    if (isApril && isActiveRange) setShow(true);
+    if (isApril && isActiveRange) useStateCheck(true);
   }, []);
 
   if (!show) return null;
@@ -60,6 +60,7 @@ interface UserData {
   id: string;
   name: string;
   role: string;          
+  designation: string; // ✨ Added designation property onto type interface schema
   initials: string;
   employee_id: string;
   profile_image?: string; 
@@ -81,6 +82,7 @@ export default function App() {
           id: parsed.id,
           name: parsed.name,
           role: parsed.role,
+          designation: parsed.designation || parsed.role || 'Employees', // ✨ Captures designation parameter fallback safety safely
           initials: parsed.initials,
           employee_id: parsed.employee_id,
           profile_image: parsed.profile_image 
@@ -104,7 +106,7 @@ export default function App() {
         try {
           const parsed = JSON.parse(saved);
           setUserData(prev => {
-            if (prev?.profile_image !== parsed.profile_image || prev?.name !== parsed.name) {
+            if (prev?.profile_image !== parsed.profile_image || prev?.name !== parsed.name || prev?.designation !== parsed.designation) {
               return { ...prev, ...parsed };
             }
             return prev;
@@ -149,6 +151,7 @@ export default function App() {
         id: parsedUser.id,
         name: parsedUser.name,
         role: parsedUser.role,
+        designation: parsedUser.designation || parsedUser.role || 'Employees', // ✨ Synchronizes designation payload metrics onto dashboard context mount
         initials: parsedUser.initials,
         employee_id: parsedUser.employee_id,
         profile_image: parsedUser.profile_image 
@@ -163,7 +166,7 @@ export default function App() {
     setIsLoggingOut(true);
     if (userData) {
       try {
-        await fetch('https://ambassador-michigan-mandate-penalty.trycloudflare.com/api/logs/logout', {
+        await fetch('http://localhost:5000/api/logs/logout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ employee_id: userData.employee_id }),
@@ -197,11 +200,8 @@ export default function App() {
       case 'departments': return <Departments />;
       case 'projects': return <Projects />;
       case 'employees': return <Employees />;
-      
-      // ✅ Props removed to fully reconcile strict type interfaces on subcomponents
       case 'add-order': return <AddOrder />;
       case 'add-mistakes': return <AddMistakes />;
-      
       case 'bonus-calculation': 
         return (
           <BonusCalculation 
@@ -213,7 +213,6 @@ export default function App() {
       case 'ir': return <IncidentReports />;
       case 'warning-letter': return <WarningLetters />;
       case 'leaves': return <Leaves />;
-      
       case 'attendance-records': 
         return (
           <AttendanceRecords 
@@ -221,10 +220,7 @@ export default function App() {
             employeeId={userData?.employee_id} 
           />
         );
-
-      case 'attendance-reports': 
-        return <AttendanceReports />;
-
+      case 'attendance-reports': return <AttendanceReports />;
       case 'login-logs': return <LoginLogs />;
       case 'leave-logs': return <LeaveLogs />;
       case 'other-logs': return <OtherLogs />;
@@ -277,7 +273,8 @@ export default function App() {
             onLogout={handleLogout}
             isCollapsed={isSidebarCollapsed}
             employeeName={userData?.name}
-            employeeDesignation={userData?.role} 
+            // 🔄 UPDATED: Passing the actual designation text property channel into the component structure instead of role
+            employeeDesignation={userData?.designation} 
             employeeInitials={userData?.initials}
             profileImage={userData?.profile_image} 
           />
